@@ -4,17 +4,19 @@ export { isCompatible, PORT_TYPE_COLORS } from './types.js';
 
 export { triggerCategory } from './trigger.js';
 export { ioCategory } from './io.js';
-export { logicCategory } from './logic.js';
+export { controlCategory } from './control.js';
 export { dataCategory } from './data.js';
-export { actionCategory } from './action.js';
+export { serialCategory } from './serial.js';
+export { functionCategory } from './function.js';
 
 import { triggerCategory } from './trigger.js'; 
 import { ioCategory } from './io.js';
-import { logicCategory } from './logic.js';
+import { controlCategory } from './control.js';
 import { dataCategory } from './data.js';
-import { actionCategory } from './action.js';
+import { serialCategory } from './serial.js';
+import { functionCategory } from './function.js';
 
-export const blockCategories = [triggerCategory, ioCategory, logicCategory, dataCategory, actionCategory];
+export const blockCategories = [triggerCategory, ioCategory, controlCategory, dataCategory, serialCategory, functionCategory];
 
 /** map จาก typeId → BlockDef สำหรับค้นหาเร็ว */
 export const blockDefMap = Object.fromEntries(

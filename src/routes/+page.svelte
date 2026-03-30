@@ -29,8 +29,8 @@
 	/** dataType ของ output port ที่กำลังลากเส้นอยู่ */
 	const connectingDataType = $derived<DataType | null>(
 		connectingFrom
-			? (canvasBlocks.find((b) => b.id === connectingFrom.blockId)
-					?.outputs.find((p) => p.id === connectingFrom.portId)
+			? (canvasBlocks.find((b) => b.id === connectingFrom?.blockId)
+					?.outputs.find((p) => p.id === connectingFrom?.portId)
 					?.dataType ?? 'any')
 			: null
 	);
@@ -61,24 +61,36 @@
 		};
 	}
 
-	const PARAM_ROW_H = 22;
-
-	function visibleParamCount(block: CanvasBlock) {
-		const def = blockDefMap[block.typeId];
-		return def?.params?.length ?? 0;
-	}
+	const PARAM_INPUT_H = 30;  // input/select row (select มี min-height ~24px ใน browser)
+	const PARAM_LABEL_H = 12;  // label row
+	const PARAM_GAP = 4;       // gap-1 = 4px ระหว่าง items
 
 	function blockParamH(block: CanvasBlock) {
-		const n = visibleParamCount(block);
-		return n > 0 ? n * PARAM_ROW_H + 8 : 0;
+		const def = blockDefMap[block.typeId];
+		const params = def?.params;
+		if (!params || params.length === 0) return 0;
+		let h = 8; // pt-1 pb-1 = 4+4px
+		for (let i = 0; i < params.length; i++) {
+			if (i > 0) h += PARAM_GAP;
+			if (params[i].label) { h += PARAM_LABEL_H; h += PARAM_GAP; }
+			h += PARAM_INPUT_H;
+		}
+		h += 4;
+		return h;
+	}
+
+	/** ความสูงของส่วน port (ไม่รวม header และ params) */
+	function blockPortH(block: CanvasBlock) {
+		return Math.max(block.inputs.length, block.outputs.length) * PORT_ROW_H + 9;
 	}
 
 	function blockHeight(block: CanvasBlock) {
-		return BLOCK_HEADER + Math.max(block.inputs.length, block.outputs.length) * PORT_ROW_H + 8 + blockParamH(block);
+		return BLOCK_HEADER + blockPortH(block) + blockParamH(block);
 	}
 
+	/** ports อยู่ใต้ header โดยตรง ไม่มี params ขั้นกลาง */
 	function portY(block: CanvasBlock, index: number, total: number) {
-		return block.y + BLOCK_HEADER + blockParamH(block) + PORT_ROW_H * index + PORT_ROW_H / 2;
+		return block.y + BLOCK_HEADER + PORT_ROW_H * index + PORT_ROW_H / 2;
 	}
 
 	const filteredCategories = $derived(
@@ -394,7 +406,7 @@
 			'void setup() {'
 		];
 		const visited = new Set<string>();
-		const INDENT = '    ';
+		const INDENT = '  ';
 		const functionDecls: string[] = [];
 		const functionDefs: string[] = [];
 		const safeId = (id: string) => id.replace(/-/g, '_');
@@ -423,12 +435,15 @@
 		}
 
 		function captureCode(fromBlockId: string, portId: string, baseDepth: number): string {
-			const conn = connections.find(
+			const conns = connections.filter(
 				(c) => c.fromBlockId === fromBlockId && c.fromPortId === portId
 			);
-			if (!conn) return '';
+			if (conns.length === 0) return '';
 			const buf: string[] = [];
-			traverseTo(conn.toBlockId, baseDepth, buf, new Set());
+			const visitedSet = new Set<string>();
+			for (const conn of conns) {
+				traverseTo(conn.toBlockId, baseDepth, buf, visitedSet);
+			}
 			return buf.join('\n');
 		}
 
@@ -467,10 +482,12 @@
 					target.push(...part);
 				} else {
 					const child = part as ChildRef;
-					const conn = connections.find(
+					const childConns = connections.filter(
 						(c) => c.fromBlockId === blockId && c.fromPortId === child.portId
 					);
-					if (conn) traverseTo(conn.toBlockId, depth + child.depthDelta, target, visitedSet);
+					for (const conn of childConns) {
+						traverseTo(conn.toBlockId, depth + child.depthDelta, target, visitedSet);
+					}
 				}
 			}
 		}
@@ -490,6 +507,95 @@
 	}
 	const cCode = $derived(flowToC());
 	let showConsole = $state(true);
+
+	// ─── Project Save / Open ────────────────────────────────────────
+	async function saveProject() {
+		const data = JSON.stringify({ canvasBlocks, connections }, null, 2);
+		if ('showSaveFilePicker' in window) {
+			try {
+				const handle = await (window as any).showSaveFilePicker({
+					suggestedName: 'project.json',
+					types: [{ description: 'FlowCode Project', accept: { 'application/json': ['.json'] } }]
+				});
+				const writable = await handle.createWritable();
+				await writable.write(data);
+				await writable.close();
+			} catch (e: any) {
+				if (e.name !== 'AbortError') console.error(e);
+			}
+		} else {
+			// fallback
+			const a = document.createElement('a');
+			a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+			a.download = 'project.json';
+			a.click();
+			URL.revokeObjectURL(a.href);
+		}
+	}
+
+	async function openProject() {
+		if ('showOpenFilePicker' in window) {
+			try {
+				const [handle] = await (window as any).showOpenFilePicker({
+					types: [{ description: 'FlowCode Project', accept: { 'application/json': ['.json'] } }]
+				});
+				const file = await handle.getFile();
+				loadProjectJSON(await file.text());
+			} catch (e: any) {
+				if (e.name !== 'AbortError') console.error(e);
+			}
+		} else {
+			// fallback
+			const input = document.createElement('input');
+			input.type = 'file';
+			input.accept = '.json,application/json';
+			input.onchange = async () => {
+				const file = input.files?.[0];
+				if (file) loadProjectJSON(await file.text());
+			};
+			input.click();
+		}
+	}
+
+	function loadProjectJSON(text: string) {
+		try {
+			const data = JSON.parse(text);
+			if (Array.isArray(data.canvasBlocks) && Array.isArray(data.connections)) {
+				canvasBlocks = data.canvasBlocks;
+				connections = data.connections;
+				// sync nextId ให้ไม่ชนกับ id เดิม
+				const ids = canvasBlocks.map((b) => parseInt(b.id.replace('block-', '')) || 0);
+				const connIds = connections.map((c) => parseInt(c.id.replace('conn-', '')) || 0);
+				nextId = Math.max(0, ...ids, ...connIds) + 1;
+			}
+		} catch {
+			console.error('ไม่สามารถโหลดไฟล์โปรเจคได้');
+		}
+	}
+
+	async function runProject() {
+		const data = flowToC();
+		if ('showSaveFilePicker' in window) {
+			try {
+				const handle = await (window as any).showSaveFilePicker({
+					suggestedName: 'project.ino',
+					types: [{ description: 'Arduino Project', accept: { 'text/plain': ['.ino'] } }]
+				});
+				const writable = await handle.createWritable();
+				await writable.write(data);
+				await writable.close();
+			} catch (e: any) {
+				if (e.name !== 'AbortError') console.error(e);
+			}
+		} else {
+			// fallback
+			const a = document.createElement('a');
+			a.href = URL.createObjectURL(new Blob([data], { type: 'text/plain' }));
+			a.download = 'project.ino';
+			a.click();
+			URL.revokeObjectURL(a.href);
+		}
+	}
 
 	$effect(() => {
 		console.log('[FlowCode → C]\n' + cCode);
@@ -512,6 +618,7 @@
 			<button
 				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
 				title="เปิดโปรเจค"
+				onclick={openProject}
 			>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -524,6 +631,7 @@
 			<button
 				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
 				title="บันทึกโปรเจค"
+				onclick={saveProject}
 			>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -536,6 +644,7 @@
 
 			<!-- Run -->
 			<button
+				onclick={runProject}
 				class="flex items-center gap-1.5 rounded bg-green-700 px-2.5 py-1.5 text-xs text-white transition-colors hover:bg-green-600"
 			>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -623,11 +732,13 @@
 	<div class="flex flex-1 overflow-hidden">
 		<!-- ── Canvas ─────────────────────────────────────────────── -->
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div
 			bind:this={canvas}
 			class="relative flex-1 overflow-hidden"
 			style="background-color:#0d1117; background-image: radial-gradient(circle, #1e293b 1px, transparent 1px); background-size: {GRID_SIZE * zoom}px {GRID_SIZE * zoom}px; background-position: {panX % (GRID_SIZE * zoom)}px {panY % (GRID_SIZE * zoom)}px; cursor: {isPanning ? 'grabbing' : 'grab'};"
 			role="application"
+			tabindex="-1"
 			aria-label="Flow canvas"
 			ondragover={(e) => e.preventDefault()}
 			ondrop={handleCanvasDrop}
@@ -661,11 +772,12 @@
 				{#each connections as conn (conn.id)}
 					{@const isSelected = selectedConnId === conn.id}
 					{@const isDraggingThis = draggingConnEnd?.connId === conn.id}
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<g
 						style="pointer-events:stroke; cursor:pointer;"
 						onclick={(e) => { e.stopPropagation(); selectedConnId = conn.id; }}
+						onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); selectedConnId = conn.id; } }}
 						role="button"
+						tabindex="0"
 						aria-label="เลือกการเชื่อมต่อ"
 						class="conn-group"
 					>
@@ -769,14 +881,38 @@
 							<span class="ml-1.5 truncate text-[11px] font-semibold text-gray-200">{block.name}</span>
 						</div>
 
-						<!-- Params (editable) -->
+					<!-- Port labels inside block — อยู่ใต้ header โดยตรง -->
+						<div class="absolute flex justify-between px-1" style="top:{BLOCK_HEADER}px; left:0; right:0; height:{blockPortH(block)}px;">
+							<!-- Input labels -->
+							<div class="flex flex-col gap-0 text-left">
+								{#each block.inputs as port, i}
+									<div class="flex items-center" style="height:{PORT_ROW_H}px;">
+										<span class="text-[9px] text-gray-500 pl-2">{port.label}</span><span class="ml-1 text-[8px] opacity-50" style="color:{PORT_TYPE_COLORS[port.dataType ?? 'any']}">{port.dataType}</span>
+									</div>
+								{/each}
+							</div>
+							<!-- Output labels -->
+							<div class="flex flex-col gap-0 text-right">
+								{#each block.outputs as port, i}
+									<div class="flex items-center justify-end" style="height:{PORT_ROW_H}px;">
+										<span class="mr-1 text-[8px] opacity-50" style="color:{PORT_TYPE_COLORS[port.dataType ?? 'any']}">{port.dataType}</span><span class="text-[9px] text-gray-500 pr-2">{port.label}</span>
+									</div>
+								{/each}
+							</div>
+						</div>
+
+						<!-- Params — อยู่ใต้ port section -->
 						{#if blockDef?.params && blockDef.params.length > 0}
-							<div class="flex flex-col gap-1 px-2 pt-1 pb-1">
+							<div class="absolute flex flex-col gap-1 px-2 pt-1 pb-1" style="top:{BLOCK_HEADER + blockPortH(block)}px; left:0; right:0;">
 								{#each blockDef.params as pDef}
 									{@const pVal = block.params?.[pDef.id] ?? paramDefault(pDef)}
+									{#if pDef.label}
+										<span class="text-[9px] text-gray-500 leading-tight">{pDef.label}</span>
+									{/if}
 									{#if pDef.type === 'option'}
 										<select
 											class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
+											style="height:{PARAM_INPUT_H}px"
 											onmousedown={(e) => e.stopPropagation()}
 											onchange={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLSelectElement).value)}
 										>
@@ -787,6 +923,7 @@
 									{:else if pDef.type === 'number'}
 										<input
 											class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
+											style="height:{PARAM_INPUT_H}px"
 											type="number"
 											step="any"
 											value={pVal}
@@ -796,6 +933,7 @@
 									{:else}
 										<input
 											class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
+											style="height:{PARAM_INPUT_H}px"
 											type="text"
 											value={pVal}
 											onmousedown={(e) => e.stopPropagation()}
@@ -805,44 +943,18 @@
 								{/each}
 							</div>
 						{/if}
-
-					<!-- Port labels inside block -->
-						<div class="absolute flex justify-between px-1" style="top:{BLOCK_HEADER + blockParamH(block)}px; left:0; right:0; height:{Math.max(block.inputs.length, block.outputs.length) * PORT_ROW_H}px;">
-							<!-- Input labels -->
-							<div class="flex flex-col gap-0 text-left">
-								{#each block.inputs as port, i}
-									<div
-										class="flex items-center"
-										style="height:{PORT_ROW_H}px;"
-									>
-										<span class="text-[9px] text-gray-500 pl-2">{port.label}</span><span class="ml-1 text-[8px] opacity-50" style="color:{PORT_TYPE_COLORS[port.dataType ?? 'any']}">{port.dataType}</span>
-									</div>
-								{/each}
-							</div>
-							<!-- Output labels -->
-							<div class="flex flex-col gap-0 text-right">
-								{#each block.outputs as port, i}
-									<div
-										class="flex items-center justify-end"
-										style="height:{PORT_ROW_H}px;"
-									>
-										<span class="mr-1 text-[8px] opacity-50" style="color:{PORT_TYPE_COLORS[port.dataType ?? 'any']}">{port.dataType}</span><span class="text-[9px] text-gray-500 pr-2">{port.label}</span>
-									</div>
-								{/each}
-							</div>
-						</div>
 					</div>
 
 					<!-- Input ports — left edge -->
 					{#each block.inputs as port, i}
-						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<div
 							class="port-btn absolute flex items-center justify-center"
-							style="left:{-PORT_R}px; top:{BLOCK_HEADER + blockParamH(block) + PORT_ROW_H * i + PORT_ROW_H / 2 - PORT_R}px; width:{PORT_R * 2}px; height:{PORT_R * 2}px; z-index:10;"
+							style="left:{-PORT_R}px; top:{BLOCK_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2 - PORT_R}px; width:{PORT_R * 2}px; height:{PORT_R * 2}px; z-index:10;"
 							role="button"
 							tabindex="0"
 							aria-label="Input port {port.label}"
 							onmouseup={(e) => handleInputPortMouseUp(e, block.id, port.id)}
+							onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleInputPortMouseUp(e as unknown as MouseEvent, block.id, port.id); }}
 						>
 							<div
 								class="h-full w-full rounded-full border-2 transition-all hover:scale-125"
@@ -853,14 +965,14 @@
 
 					<!-- Output ports — right edge -->
 					{#each block.outputs as port, i}
-						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<div
 							class="port-btn absolute flex items-center justify-center"
-							style="right:{-PORT_R}px; top:{BLOCK_HEADER + blockParamH(block) + PORT_ROW_H * i + PORT_ROW_H / 2 - PORT_R}px; width:{PORT_R * 2}px; height:{PORT_R * 2}px; z-index:10;"
+							style="right:{-PORT_R}px; top:{BLOCK_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2 - PORT_R}px; width:{PORT_R * 2}px; height:{PORT_R * 2}px; z-index:10;"
 							role="button"
 							tabindex="0"
 							aria-label="Output port {port.label}"
 							onmousedown={(e) => handleOutputPortMouseDown(e, block.id, port.id)}
+							onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleOutputPortMouseDown(e as unknown as MouseEvent, block.id, port.id); }}
 						>
 							<div
 								class="h-full w-full rounded-full border-2 transition-all hover:scale-125"

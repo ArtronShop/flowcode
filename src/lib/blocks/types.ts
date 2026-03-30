@@ -131,6 +131,7 @@ export type CodeGenContext = {
 
 export type ParamOption = {
 	id: string;
+	label?: string;
 	type: 'option';
 	options: { label: string; value: string }[];
 	default?: string;
@@ -138,6 +139,7 @@ export type ParamOption = {
 
 export type ParamText = {
 	id: string;
+	label?: string;
 	type: 'text';
 	default?: string;
 	validation?: (text: string) => string;
@@ -145,6 +147,7 @@ export type ParamText = {
 
 export type ParamNumber = {
 	id: string;
+	label?: string;
 	type: 'number';
 	default?: string;
 	validation?: (n: number) => number;

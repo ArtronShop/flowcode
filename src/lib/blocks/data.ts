@@ -73,30 +73,7 @@ export const dataCategory: BlockCategory = {
 			toExpr(params) { return params.value === 'false' ? 'false' : 'true'; },
 			toCode() { return { parts: [] }; }
 		},
-		{
-			id: 'lit_select',
-			name: 'Select',
-			color: '#06b6d4',
-			icon: '▾',
-			category: 'data',
-			inputs: [],
-			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'any' }],
-			params: [
-				{
-					id: 'value',
-					type: 'option',
-					options: [
-						{ label: 'HIGH', value: 'HIGH' },
-						{ label: 'LOW', value: 'LOW' },
-						{ label: 'INPUT', value: 'INPUT' },
-						{ label: 'OUTPUT', value: 'OUTPUT' },
-						{ label: 'INPUT_PULLUP', value: 'INPUT_PULLUP' }
-					]
-				}
-			],
-			toExpr(params) { return params.value ?? 'HIGH'; },
-			toCode() { return { parts: [] }; }
-		},
+		/*
 		{
 			id: 'variable',
 			name: 'Variable',
@@ -106,8 +83,7 @@ export const dataCategory: BlockCategory = {
 			inputs: [{ id: 'set', type: 'input', label: 'Set', dataType: 'int' }],
 			outputs: [{ id: 'get', type: 'output', label: 'Get', dataType: 'int' }],
 			toCode({ block, pad, safeId, resolveInput }) {
-				let init = '0';
-				try { init = resolveInput('set') ?? '0'; } catch { /* ไม่มีค่าเริ่มต้น ใช้ 0 */ }
+				let init = resolveInput('set') ?? '0';
 				return {
 					parts: [
 						[`${pad}int ${safeId(block.id)} = ${init};`],
@@ -128,9 +104,8 @@ export const dataCategory: BlockCategory = {
 			],
 			outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: 'float' }],
 			toCode({ block, pad, safeId, resolveInput }) {
-				let a = '0', b = '0';
-				try { a = resolveInput('a') ?? '0'; } catch { /* ใช้ 0 */ }
-				try { b = resolveInput('b') ?? '0'; } catch { /* ใช้ 0 */ }
+				const a = resolveInput('a') ?? '0';
+				const b = resolveInput('b') ?? '0';
 				return {
 					parts: [
 						[`${pad}float ${safeId(block.id)} = ${a} + ${b};`],
@@ -148,8 +123,7 @@ export const dataCategory: BlockCategory = {
 			inputs: [{ id: 'in', type: 'input', label: 'In', dataType: 'String' }],
 			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'String' }],
 			toCode({ block, pad, safeId, resolveInput }) {
-				let src = '""';
-				try { src = resolveInput('in') ?? '""'; } catch { /* ใช้ string ว่าง */ }
+				const src = resolveInput('in') ?? '""';
 				return {
 					parts: [
 						[`${pad}String ${safeId(block.id)} = ${src};`],
@@ -169,10 +143,8 @@ export const dataCategory: BlockCategory = {
 			toCode({ block, pad, safeId, resolveInput }) {
 				const id = safeId(block.id);
 				const lines = [`${pad}int ${id}[100];`, `${pad}int ${id}_size = 0;`];
-				try {
-					const val = resolveInput('push') ?? '';
-					if (val) lines.push(`${pad}${id}[${id}_size++] = ${val};`);
-				} catch { /* ไม่มีค่า push */ }
+				const val = resolveInput('push') ?? '';
+				if (val) lines.push(`${pad}${id}[${id}_size++] = ${val};`);
 				return {
 					parts: [
 						lines,
@@ -181,5 +153,6 @@ export const dataCategory: BlockCategory = {
 				};
 			}
 		}
+		*/
 	]
 };
