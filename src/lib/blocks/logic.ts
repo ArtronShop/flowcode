@@ -9,15 +9,16 @@ export const logicCategory: BlockCategory = {
 			color: '#f59e0b',
 			icon: '?',
 			category: 'logic',
-			inputs: [{ id: 'in', type: 'input', label: 'In' }],
+			inputs: [{ id: 'in', type: 'input', label: 'Condition', dataType: 'any' }],
 			outputs: [
-				{ id: 'true', type: 'output', label: 'True' },
-				{ id: 'false', type: 'output', label: 'False' }
+				{ id: 'true', type: 'output', label: 'True', dataType: 'void' },
+				{ id: 'false', type: 'output', label: 'False', dataType: 'void' }
 			],
-			toCode({ pad }) {
+			toCode({ pad, resolveInput }) {
+				const cond = resolveInput('in') ?? 'true';
 				return {
 					parts: [
-						[`${pad}if (condition) {`],
+						[`${pad}if (${cond}) {`],
 						{ portId: 'true', depthDelta: 1 },
 						[`${pad}} else {`],
 						{ portId: 'false', depthDelta: 1 },
@@ -32,15 +33,16 @@ export const logicCategory: BlockCategory = {
 			color: '#06b6d4',
 			icon: '↻',
 			category: 'logic',
-			inputs: [{ id: 'in', type: 'input', label: 'In' }],
+			inputs: [{ id: 'in', type: 'input', label: 'Condition', dataType: 'any' }],
 			outputs: [
-				{ id: 'body', type: 'output', label: 'Body' },
-				{ id: 'done', type: 'output', label: 'Done' }
+				{ id: 'body', type: 'output', label: 'Body', dataType: 'void' },
+				{ id: 'done', type: 'output', label: 'Done', dataType: 'void' }
 			],
-			toCode({ pad }) {
+			toCode({ pad, resolveInput }) {
+				const cond = resolveInput('in') ?? 'true';
 				return {
 					parts: [
-						[`${pad}while (condition) {`],
+						[`${pad}while (${cond}) {`],
 						{ portId: 'body', depthDelta: 1 },
 						[`${pad}}`],
 						{ portId: 'done', depthDelta: 0 }
@@ -54,16 +56,17 @@ export const logicCategory: BlockCategory = {
 			color: '#e879f9',
 			icon: '⇌',
 			category: 'logic',
-			inputs: [{ id: 'in', type: 'input', label: 'In' }],
+			inputs: [{ id: 'in', type: 'input', label: 'Value', dataType: 'int' }],
 			outputs: [
-				{ id: 'case1', type: 'output', label: 'Case 1' },
-				{ id: 'case2', type: 'output', label: 'Case 2' },
-				{ id: 'default', type: 'output', label: 'Default' }
+				{ id: 'case1', type: 'output', label: 'Case 1', dataType: 'void' },
+				{ id: 'case2', type: 'output', label: 'Case 2', dataType: 'void' },
+				{ id: 'default', type: 'output', label: 'Default', dataType: 'void' }
 			],
-			toCode({ pad }) {
+			toCode({ pad, resolveInput }) {
+				let val = resolveInput('in') ?? '-1'
 				return {
 					parts: [
-						[`${pad}switch (value) {`],
+						[`${pad}switch (${val}) {`],
 						[`${pad}    case 1:`],
 						{ portId: 'case1', depthDelta: 2 },
 						[`${pad}        break;`],

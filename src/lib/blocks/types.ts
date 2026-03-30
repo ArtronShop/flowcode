@@ -1,12 +1,68 @@
+// ─── Arduino-compatible data types ──────────────────────────────────────────
+
+export type DataType =
+	| 'void'    // control flow — ไม่มีค่าข้อมูล
+	| 'bool'    // boolean (true/false)
+	| 'byte'    // uint8_t, 0–255
+	| 'char'    // อักขระ 1 ตัว
+	| 'int'     // 16-bit signed integer
+	| 'long'    // 32-bit signed integer
+	| 'float'   // 32-bit floating point
+	| 'double'  // 64-bit floating point (= float บน AVR Arduino)
+	| 'String'  // Arduino String class
+	| 'any'
+	| string;    // รับได้ทุก type (generic / utility blocks)
+
+/**
+ * ตรวจสอบว่า output type `from` สามารถต่อเข้า input type `to` ได้หรือไม่
+ * กฎ: widening numeric, char→String, any←→*, void เฉพาะ void เท่านั้น
+ */
+export function isCompatible(from: DataType, to: DataType): boolean {
+	if (from === to) return true;
+	if (from === 'any' || to === 'any') return true;
+
+	// Numeric widening: byte ⊆ int ⊆ long ⊆ float ⊆ double
+	const numeric: DataType[] = ['byte', 'int', 'long', 'float', 'double'];
+	const fi = numeric.indexOf(from);
+	const ti = numeric.indexOf(to);
+	if (fi !== -1 && ti !== -1 && fi <= ti) return true;
+
+	// bool → numeric
+	if (from === 'bool' && ti !== -1) return true;
+
+	// char → String
+	if (from === 'char' && to === 'String') return true;
+
+	return false;
+}
+
+/** สีประจำ type สำหรับแสดงบน port */
+export const PORT_TYPE_COLORS: Record<DataType, string> = {
+	void:   '#6b7280', // gray     — control flow
+	bool:   '#f59e0b', // amber
+	byte:   '#10b981', // emerald
+	char:   '#f97316', // orange
+	int:    '#3b82f6', // blue
+	long:   '#6366f1', // indigo
+	float:  '#8b5cf6', // violet
+	double: '#a855f7', // purple
+	String: '#ef4444', // red
+	any:    '#94a3b8', // slate    — generic
+};
+
+// ─── Canvas / Connection types ───────────────────────────────────────────────
+
 export type Port = {
 	id: string;
 	type: 'input' | 'output';
 	label: string;
+	dataType: DataType;
 };
 
 export type CanvasBlock = {
 	id: string;
 	typeId: string;
+	trigger: boolean;
 	name: string;
 	color: string;
 	icon: string;
@@ -14,6 +70,8 @@ export type CanvasBlock = {
 	y: number;
 	inputs: Port[];
 	outputs: Port[];
+	/** ค่าที่ผู้ใช้แก้ไขได้บนบล็อก เช่น { value: '42' } */
+	params: Record<string, string>;
 };
 
 export type Connection = {
@@ -24,6 +82,8 @@ export type Connection = {
 	toPortId: string;
 };
 
+// ─── Code generation types ───────────────────────────────────────────────────
+
 /** อ้างอิง output port ที่ต้องการให้ traverse ต่อ */
 export type ChildRef = {
 	portId: string;
@@ -33,30 +93,87 @@ export type ChildRef = {
 
 /**
  * ผลลัพธ์จาก toCode() — สลับระหว่างบรรทัดโค้ดกับจุดที่ต้อง traverse ต่อ
- * traversal engine จะอ่าน parts ตามลำดับ:
  *   - string[] → push ลง output
- *   - ChildRef  → หา connection แล้ว traverse ต่อ
+ *   - ChildRef  → หา connection แล้ว traverse ต่อ (inline)
  */
 export type CodeResult = {
 	parts: Array<string[] | ChildRef>;
 };
 
-/** Context ที่ส่งให้ toCode() — เฉพาะสิ่งที่บล็อกต้องการสร้างโค้ดของตัวเอง */
+/** Context ที่ส่งให้ toCode() */
 export type CodeGenContext = {
 	block: CanvasBlock;
+	/** ค่า params ของบล็อกนี้ keyed by param id — เข้าถึงได้เลย เช่น params.value */
+	params: Record<string, string>;
 	depth: number;
 	pad: string;
 	safeId: (id: string) => string;
+	/**
+	 * traverse blocks ที่ต่อออกจาก portId แล้วคืนเป็น string
+	 * ใช้สำหรับฝัง code ไว้ใน if / for / callback / function body
+	 * @param portId  output port ของบล็อกนี้ที่จะ traverse
+	 * @param baseDepth  indent level เริ่มต้น (default: depth + 1)
+	 */
+	captureCode: (portId: string, baseDepth?: number) => string;
+	/**
+	 * ลงทะเบียน C function แยก — จะถูก emit ท้ายไฟล์
+	 * @param header       เช่น "void myFn(void* pvParameters)"
+	 * @param body         code ที่จะอยู่ใน { } (ได้จาก captureCode หรือสร้างเอง)
+	 * @param declaration  forward declaration (optional) จะถูก emit ก่อน setup()
+	 */
+	registerFunction: (header: string, body: string, declaration?: string) => void;
+	/**
+	 * คืนชื่อ variable / expression ของบล็อกที่ต่อเข้ามาทาง input port นี้
+	 * ถ้าไม่มีการต่อเส้น จะ throw เพื่อให้ toCode() จัดการ fallback เอง
+	 */
+	resolveInput: (portId: string) => string | null;
 };
+
+export type ParamOption = {
+	id: string;
+	type: 'option';
+	options: { label: string; value: string }[];
+	default?: string;
+};
+
+export type ParamText = {
+	id: string;
+	type: 'text';
+	default?: string;
+	validation?: (text: string) => string;
+};
+
+export type ParamNumber = {
+	id: string;
+	type: 'number';
+	default?: string;
+	validation?: (n: number) => number;
+};
+
+export type ParamDef = ParamOption | ParamText | ParamNumber;
+
+/** helper: คืนค่า default ของ param */
+export function paramDefault(p: ParamDef): string {
+	if (p.type === 'option') return p.default ?? p.options[0]?.value ?? '';
+	return p.default ?? (p.type === 'number' ? '0' : '');
+}
 
 export type BlockDef = {
 	id: string;
+	trigger?: boolean;
 	name: string;
 	color: string;
 	icon: string;
 	category: string;
 	inputs: Port[];
 	outputs: Port[];
+	/** พารามิเตอร์ที่แก้ไขได้บนบล็อก (array, keyed by id) */
+	params?: ParamDef[];
+	/**
+	 * ถ้ามี toExpr: resolveInput จะ return ค่า expression โดยตรง (ไม่ declare variable)
+	 * รับ params object ที่ keyed by id — เข้าถึงได้เลย เช่น params.value, params.OK
+	 */
+	toExpr?: (params: Record<string, string>) => string;
 	/**
 	 * สร้างโค้ดสำหรับบล็อกนี้
 	 * @throws เมื่อสร้างโค้ดไม่ได้ (เช่น ข้อมูลไม่ครบ)

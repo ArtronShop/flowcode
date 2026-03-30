@@ -1,9 +1,12 @@
 <script lang="ts">
 	import {
 		blockCategories,
-		blockDefMap
+		blockDefMap,
+		isCompatible,
+		PORT_TYPE_COLORS,
+		paramDefault
 	} from '$lib/blocks/index.js';
-	import type { CanvasBlock, Connection, BlockDef, ChildRef } from '$lib/blocks/index.js';
+	import type { CanvasBlock, Connection, BlockDef, ChildRef, DataType, ParamDef } from '$lib/blocks/index.js';
 
 		let canvasBlocks = $state<CanvasBlock[]>([]);
 	let connections = $state<Connection[]>([]);
@@ -20,7 +23,17 @@
 	let connectingFrom = $state<{ blockId: string; portId: string } | null>(null);
 	let mousePos = $state({ x: 0, y: 0 });
 	let selectedConnId = $state<string | null>(null);
+	let selectedBlockId = $state<string | null>(null);
 	let draggingConnEnd = $state<{ connId: string; end: 'from' | 'to' } | null>(null);
+
+	/** dataType ของ output port ที่กำลังลากเส้นอยู่ */
+	const connectingDataType = $derived<DataType | null>(
+		connectingFrom
+			? (canvasBlocks.find((b) => b.id === connectingFrom.blockId)
+					?.outputs.find((p) => p.id === connectingFrom.portId)
+					?.dataType ?? 'any')
+			: null
+	);
 
 	let canvas: HTMLElement;
 	let nextId = 1;
@@ -48,12 +61,24 @@
 		};
 	}
 
+	const PARAM_ROW_H = 22;
+
+	function visibleParamCount(block: CanvasBlock) {
+		const def = blockDefMap[block.typeId];
+		return def?.params?.length ?? 0;
+	}
+
+	function blockParamH(block: CanvasBlock) {
+		const n = visibleParamCount(block);
+		return n > 0 ? n * PARAM_ROW_H + 8 : 0;
+	}
+
 	function blockHeight(block: CanvasBlock) {
-		return BLOCK_HEADER + Math.max(block.inputs.length, block.outputs.length) * PORT_ROW_H + 8;
+		return BLOCK_HEADER + Math.max(block.inputs.length, block.outputs.length) * PORT_ROW_H + 8 + blockParamH(block);
 	}
 
 	function portY(block: CanvasBlock, index: number, total: number) {
-		return block.y + BLOCK_HEADER + PORT_ROW_H * index + PORT_ROW_H / 2;
+		return block.y + BLOCK_HEADER + blockParamH(block) + PORT_ROW_H * index + PORT_ROW_H / 2;
 	}
 
 	const filteredCategories = $derived(
@@ -82,13 +107,15 @@
 			{
 				id: `block-${nextId++}`,
 				typeId: src.id,
+				trigger: src?.trigger || false,
 				name: src.name,
 				color: src.color,
 				icon: src.icon,
 				x: snap(Math.max(0, cc.x - BLOCK_WIDTH / 2)),
 				y: snap(Math.max(0, cc.y - BLOCK_HEADER / 2)),
 				inputs: src.inputs.map((p) => ({ ...p })),
-				outputs: src.outputs.map((p) => ({ ...p }))
+				outputs: src.outputs.map((p) => ({ ...p })),
+				params: Object.fromEntries((src.params ?? []).map((p) => [p.id, paramDefault(p)]))
 			}
 		];
 		draggingFromPalette = null;
@@ -97,6 +124,10 @@
 	function handleBlockMouseDown(e: MouseEvent, block: CanvasBlock) {
 		if ((e.target as HTMLElement).closest('.port-btn')) return;
 		e.preventDefault();
+		e.stopPropagation();
+		(document.activeElement as HTMLElement)?.blur();
+		selectedBlockId = block.id;
+		selectedConnId = null;
 		const cc = toCanvasCoords(e.clientX, e.clientY);
 		draggingBlock = {
 			id: block.id,
@@ -146,6 +177,32 @@
 		zoom = newZoom;
 	}
 
+	function zoomAround(factor: number) {
+		const rect = canvas.getBoundingClientRect();
+		const cx = rect.width / 2;
+		const cy = rect.height / 2;
+		const newZoom = Math.max(0.15, Math.min(4, zoom * factor));
+		panX = cx - (cx - panX) * (newZoom / zoom);
+		panY = cy - (cy - panY) * (newZoom / zoom);
+		zoom = newZoom;
+	}
+
+	function focusCanvas() {
+		if (canvasBlocks.length === 0) { zoom = 1; panX = 0; panY = 0; return; }
+		const rect = canvas.getBoundingClientRect();
+		const pad = 60;
+		const minX = Math.min(...canvasBlocks.map((b) => b.x));
+		const minY = Math.min(...canvasBlocks.map((b) => b.y));
+		const maxX = Math.max(...canvasBlocks.map((b) => b.x + BLOCK_WIDTH));
+		const maxY = Math.max(...canvasBlocks.map((b) => b.y + blockHeight(b)));
+		const bw = maxX - minX || 1;
+		const bh = maxY - minY || 1;
+		const newZoom = Math.min(4, Math.max(0.15, Math.min((rect.width - pad * 2) / bw, (rect.height - pad * 2) / bh)));
+		panX = (rect.width - bw * newZoom) / 2 - minX * newZoom;
+		panY = (rect.height - bh * newZoom) / 2 - minY * newZoom;
+		zoom = newZoom;
+	}
+
 	function findPortAtPos(x: number, y: number, type: 'input' | 'output', excludeBlockId?: string) {
 		for (const block of canvasBlocks) {
 			if (block.id === excludeBlockId) continue;
@@ -166,7 +223,9 @@
 			if (conn) {
 				if (draggingConnEnd.end === 'to') {
 					const hit = findPortAtPos(mousePos.x, mousePos.y, 'input', conn.fromBlockId);
-					if (hit) {
+					const _fp = canvasBlocks.find((b) => b.id === conn.fromBlockId)?.outputs.find((p) => p.id === conn.fromPortId);
+					const _tp = hit && canvasBlocks.find((b) => b.id === hit.blockId)?.inputs.find((p) => p.id === hit.portId);
+					if (hit && (!_fp || !_tp || isCompatible(_fp.dataType, _tp.dataType))) {
 						connections = connections.map((c) =>
 							c.id === draggingConnEnd!.connId
 								? { ...c, toBlockId: hit.blockId, toPortId: hit.portId }
@@ -196,11 +255,19 @@
 	}
 
 	function handleKeyDown(e: KeyboardEvent) {
-		if ((e.key === 'Delete' || e.key === 'Backspace') && selectedConnId) {
-			deleteConnection(selectedConnId);
-			selectedConnId = null;
+		const active = document.activeElement;
+		const isInput = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
+		if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput) {
+			if (selectedBlockId) {
+				deleteBlock(selectedBlockId);
+				selectedBlockId = null;
+			} else if (selectedConnId) {
+				deleteConnection(selectedConnId);
+				selectedConnId = null;
+			}
 		}
 		if (e.key === 'Escape') {
+			selectedBlockId = null;
 			selectedConnId = null;
 			connectingFrom = null;
 			draggingConnEnd = null;
@@ -216,6 +283,10 @@
 	function handleInputPortMouseUp(e: MouseEvent, blockId: string, portId: string) {
 		e.stopPropagation();
 		if (!connectingFrom) return;
+		// type check
+		const _fromPort = canvasBlocks.find((b) => b.id === connectingFrom!.blockId)?.outputs.find((p) => p.id === connectingFrom!.portId);
+		const _toPort = canvasBlocks.find((b) => b.id === blockId)?.inputs.find((p) => p.id === portId);
+		if (_fromPort && _toPort && !isCompatible(_fromPort.dataType, _toPort.dataType)) { connectingFrom = null; return; }
 		if (connectingFrom.blockId === blockId) {
 			connectingFrom = null;
 			return;
@@ -246,7 +317,9 @@
 	function handleCanvasClick() {
 		connectingFrom = null;
 		selectedConnId = null;
+		selectedBlockId = null;
 		showUserMenu = false;
+		(document.activeElement as HTMLElement)?.blur();
 	}
 
 	function getPortPos(block: CanvasBlock, portId: string, side: 'input' | 'output') {
@@ -288,65 +361,132 @@
 		if (connectingFrom?.blockId === blockId) connectingFrom = null;
 	}
 
-	function deleteConnection(connId: string) {
+	function updateBlockParam(blockId: string, paramId: string, raw: string) {
+		const def = blockDefMap[canvasBlocks.find((b) => b.id === blockId)?.typeId ?? ''];
+		const pDef = def?.params?.find((p) => p.id === paramId);
+		let value = raw;
+		if (pDef?.type === 'number' && pDef.validation) {
+			const n = parseFloat(raw);
+			if (!isNaN(n)) value = String(pDef.validation(n));
+		} else if (pDef?.type === 'text' && pDef.validation) {
+			value = pDef.validation(raw);
+		}
+		canvasBlocks = canvasBlocks.map((b) =>
+			b.id === blockId ? { ...b, params: { ...(b.params ?? {}), [paramId]: value } } : b
+		);
+	}
+
+		function deleteConnection(connId: string) {
 		connections = connections.filter((c) => c.id !== connId);
 	}
 
 	// ─── Flow → C Code Generator ────────────────────────────────────
 	function flowToC(): string {
-		const startBlock = canvasBlocks.find((b) => b.typeId === 'start');
-		if (!startBlock) {
-			return '// ไม่พบบล็อก Start\n// ลาก Start block มาวางใน Canvas ก่อน';
+		const triggerBlocks = canvasBlocks.filter((b) => b.trigger);
+		if (triggerBlocks.length === 0) {
+			return '// ไม่พบบล็อก Trigger\n// ลาก Trigger block มาวางใน Canvas ก่อน';
 		}
 
 		const lines: string[] = [
-			'#include <stdio.h>',
-			'#include <stdlib.h>',
-			'#include <string.h>',
+			'#include <Arduino.h>',
+			'{{FUNCTION_DECL}}',
 			'',
-			'int main() {'
+			'void setup() {'
 		];
 		const visited = new Set<string>();
 		const INDENT = '    ';
+		const functionDecls: string[] = [];
+		const functionDefs: string[] = [];
 		const safeId = (id: string) => id.replace(/-/g, '_');
 
-		function traverse(blockId: string, depth: number): void {
-			if (visited.has(blockId)) return;
-			visited.add(blockId);
+		function registerFunction(header: string, body: string, declaration?: string) {
+			if (declaration) functionDecls.push(declaration);
+			functionDefs.push(`${header} {\n${body}\n}`);
+		}
+
+		/**
+		 * คืนชื่อ variable ของบล็อกที่ต่อเส้นเข้ามาที่ input port นี้
+		 * convention: ทุก block ที่ produce ค่าให้ใช้ safeId(block.id) เป็นชื่อ variable
+		 */
+		function resolveInput(blockId: string, portId: string): string | null {
+			const conn = connections.find(
+				(c) => c.toBlockId === blockId && c.toPortId === portId
+			);
+			if (!conn) return null;
+			const fromBlock = canvasBlocks.find((b) => b.id === conn.fromBlockId);
+			if (!fromBlock) return null;
+			const fromDef = blockDefMap[fromBlock.typeId];
+			// literal block — return expression โดยตรง ไม่มี variable declaration
+			if (fromDef?.toExpr) return fromDef.toExpr(fromBlock.params ?? {});
+			if (fromBlock.outputs?.[0].dataType === "void") return null;
+			return safeId(fromBlock.id);
+		}
+
+		function captureCode(fromBlockId: string, portId: string, baseDepth: number): string {
+			const conn = connections.find(
+				(c) => c.fromBlockId === fromBlockId && c.fromPortId === portId
+			);
+			if (!conn) return '';
+			const buf: string[] = [];
+			traverseTo(conn.toBlockId, baseDepth, buf, new Set());
+			return buf.join('\n');
+		}
+
+		function traverseTo(blockId: string, depth: number, target: string[], visitedSet: Set<string>): void {
+			if (visitedSet.has(blockId)) return;
+			visitedSet.add(blockId);
 
 			const block = canvasBlocks.find((b) => b.id === blockId);
 			if (!block) return;
 
 			const def = blockDefMap[block.typeId];
 			if (!def) {
-				lines.push(`${INDENT.repeat(depth)}/* unknown: ${block.name} */`);
+				target.push(`${INDENT.repeat(depth)}/* unknown: ${block.name} */`);
 				return;
 			}
 
 			let result;
 			try {
-				result = def.toCode({ block, depth, pad: INDENT.repeat(depth), safeId });
+				result = def.toCode({
+					block,
+					params: block.params ?? {},
+					depth,
+					pad: INDENT.repeat(depth),
+					safeId,
+					captureCode: (portId, baseDepth) => captureCode(blockId, portId, baseDepth ?? depth + 1),
+					registerFunction,
+					resolveInput: (portId) => resolveInput(blockId, portId)
+				});
 			} catch (err) {
-				lines.push(`${INDENT.repeat(depth)}/* error: ${err instanceof Error ? err.message : String(err)} */`);
+				target.push(`${INDENT.repeat(depth)}/* error: ${err instanceof Error ? err.message : String(err)} */`);
 				return;
 			}
 
 			for (const part of result.parts) {
 				if (Array.isArray(part)) {
-					lines.push(...part);
+					target.push(...part);
 				} else {
 					const child = part as ChildRef;
 					const conn = connections.find(
 						(c) => c.fromBlockId === blockId && c.fromPortId === child.portId
 					);
-					if (conn) traverse(conn.toBlockId, depth + child.depthDelta);
+					if (conn) traverseTo(conn.toBlockId, depth + child.depthDelta, target, visitedSet);
 				}
 			}
 		}
 
-		traverse(startBlock.id, 1);
+		for (const trigger of triggerBlocks) {
+			traverseTo(trigger.id, 1, lines, visited);
+		}
 		lines.push('}');
-		return lines.join('\n');
+		lines.push('');
+		lines.push('void loop() { }');
+		if (functionDefs.length > 0) {
+			lines.push('');
+			lines.push(...functionDefs);
+		}
+		const declBlock = functionDecls.length > 0 ? functionDecls.join('\n') : '';
+		return lines.join('\n').replace('{{FUNCTION_DECL}}', declBlock);
 	}
 	const cCode = $derived(flowToC());
 	let showConsole = $state(true);
@@ -503,17 +643,17 @@
 			<!-- SVG layer for connections -->
 			<svg class="absolute inset-0 h-full w-full" style="pointer-events:none; overflow:visible;">
 				<defs>
-					<marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-						<polygon points="0 0, 8 3, 0 6" fill="#60a5fa" />
+					<marker id="arrow" markerWidth="14" markerHeight="10" refX="13" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+						<polygon points="0 0, 14 5, 0 10" fill="#60a5fa" />
 					</marker>
-					<marker id="arrow-hover" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-						<polygon points="0 0, 8 3, 0 6" fill="#f87171" />
+					<marker id="arrow-hover" markerWidth="14" markerHeight="10" refX="13" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+						<polygon points="0 0, 14 5, 0 10" fill="#f87171" />
 					</marker>
-					<marker id="arrow-selected" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-					<polygon points="0 0, 8 3, 0 6" fill="#fbbf24" />
-				</marker>
-				<marker id="arrow-temp" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-						<polygon points="0 0, 8 3, 0 6" fill="#fbbf24" />
+					<marker id="arrow-selected" markerWidth="14" markerHeight="10" refX="13" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+						<polygon points="0 0, 14 5, 0 10" fill="#fbbf24" />
+					</marker>
+					<marker id="arrow-temp" markerWidth="14" markerHeight="10" refX="13" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+						<polygon points="0 0, 14 5, 0 10" fill="#fbbf24" />
 					</marker>
 				</defs>
 
@@ -610,36 +750,64 @@
 			<!-- Canvas blocks -->
 			{#each canvasBlocks as block (block.id)}
 				{@const bh = blockHeight(block)}
+				{@const blockDef = blockDefMap[block.typeId]}
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
 					class="absolute"
 					style="left:{block.x}px; top:{block.y}px; width:{BLOCK_WIDTH}px; height:{bh}px;"
 					onmousedown={(e) => handleBlockMouseDown(e, block)}
+					onclick={(e) => e.stopPropagation()}
 				>
 					<!-- Block card -->
 					<div
-						class="absolute inset-0 select-none overflow-visible rounded-xl border shadow-xl"
-						style="border-color:{block.color}55; background:linear-gradient(160deg,#1e293b,#0f172a); cursor:move;"
+						class="absolute inset-0 select-none overflow-visible rounded-xl border shadow-xl transition-shadow"
+						style="border-color:{selectedBlockId === block.id ? '#60a5fa' : block.color+'55'}; background:linear-gradient(160deg,#1e293b,#0f172a); cursor:move; {selectedBlockId === block.id ? 'box-shadow:0 0 0 2px #3b82f6, 0 0 16px #3b82f640;' : ''}"
 					>
 						<!-- Colored top bar -->
-						<div class="flex h-8 items-center justify-between rounded-t-xl px-2.5" style="background:{block.color}22; border-bottom:1px solid {block.color}40;">
-							<div class="flex items-center gap-1.5 overflow-hidden">
-								<span class="text-sm leading-none">{block.icon}</span>
-								<span class="truncate text-[11px] font-semibold text-gray-200">{block.name}</span>
-							</div>
-							<button
-								class="ml-1 flex-shrink-0 text-gray-600 transition-colors hover:text-red-400"
-								onclick={(e) => { e.stopPropagation(); deleteBlock(block.id); }}
-								aria-label="ลบบล็อก"
-							>
-								<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
-								</svg>
-							</button>
+						<div class="flex h-8 items-center rounded-t-xl px-2.5" style="background:{block.color}22; border-bottom:1px solid {block.color}40;">
+							<span class="text-sm leading-none">{block.icon}</span>
+							<span class="ml-1.5 truncate text-[11px] font-semibold text-gray-200">{block.name}</span>
 						</div>
 
-						<!-- Port labels inside block -->
-						<div class="flex h-[calc(100%-32px)] justify-between px-1 pt-1">
+						<!-- Params (editable) -->
+						{#if blockDef?.params && blockDef.params.length > 0}
+							<div class="flex flex-col gap-1 px-2 pt-1 pb-1">
+								{#each blockDef.params as pDef}
+									{@const pVal = block.params?.[pDef.id] ?? paramDefault(pDef)}
+									{#if pDef.type === 'option'}
+										<select
+											class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
+											onmousedown={(e) => e.stopPropagation()}
+											onchange={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLSelectElement).value)}
+										>
+											{#each pDef.options as opt}
+												<option value={opt.value} selected={pVal === opt.value}>{opt.label}</option>
+											{/each}
+										</select>
+									{:else if pDef.type === 'number'}
+										<input
+											class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
+											type="number"
+											step="any"
+											value={pVal}
+											onmousedown={(e) => e.stopPropagation()}
+											onchange={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLInputElement).value)}
+										/>
+									{:else}
+										<input
+											class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
+											type="text"
+											value={pVal}
+											onmousedown={(e) => e.stopPropagation()}
+											oninput={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLInputElement).value)}
+										/>
+									{/if}
+								{/each}
+							</div>
+						{/if}
+
+					<!-- Port labels inside block -->
+						<div class="absolute flex justify-between px-1" style="top:{BLOCK_HEADER + blockParamH(block)}px; left:0; right:0; height:{Math.max(block.inputs.length, block.outputs.length) * PORT_ROW_H}px;">
 							<!-- Input labels -->
 							<div class="flex flex-col gap-0 text-left">
 								{#each block.inputs as port, i}
@@ -647,7 +815,7 @@
 										class="flex items-center"
 										style="height:{PORT_ROW_H}px;"
 									>
-										<span class="text-[9px] text-gray-500 pl-2">{port.label}</span>
+										<span class="text-[9px] text-gray-500 pl-2">{port.label}</span><span class="ml-1 text-[8px] opacity-50" style="color:{PORT_TYPE_COLORS[port.dataType ?? 'any']}">{port.dataType}</span>
 									</div>
 								{/each}
 							</div>
@@ -658,7 +826,7 @@
 										class="flex items-center justify-end"
 										style="height:{PORT_ROW_H}px;"
 									>
-										<span class="text-[9px] text-gray-500 pr-2">{port.label}</span>
+										<span class="mr-1 text-[8px] opacity-50" style="color:{PORT_TYPE_COLORS[port.dataType ?? 'any']}">{port.dataType}</span><span class="text-[9px] text-gray-500 pr-2">{port.label}</span>
 									</div>
 								{/each}
 							</div>
@@ -670,7 +838,7 @@
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<div
 							class="port-btn absolute flex items-center justify-center"
-							style="left:{-PORT_R}px; top:{BLOCK_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2 - PORT_R}px; width:{PORT_R * 2}px; height:{PORT_R * 2}px; z-index:10;"
+							style="left:{-PORT_R}px; top:{BLOCK_HEADER + blockParamH(block) + PORT_ROW_H * i + PORT_ROW_H / 2 - PORT_R}px; width:{PORT_R * 2}px; height:{PORT_R * 2}px; z-index:10;"
 							role="button"
 							tabindex="0"
 							aria-label="Input port {port.label}"
@@ -678,7 +846,7 @@
 						>
 							<div
 								class="h-full w-full rounded-full border-2 transition-all hover:scale-125"
-								style="border-color:#60a5fa; background:{connectingFrom ? '#1e3a5f' : '#0d1117'};"
+								style="border-color:{connectingDataType !== null ? (isCompatible(connectingDataType, port.dataType ?? 'any') ? '#4ade80' : '#ef444466') : PORT_TYPE_COLORS[port.dataType ?? 'any']}; background:{connectingDataType !== null ? (isCompatible(connectingDataType, port.dataType ?? 'any') ? '#14532d' : '#450a0a') : '#0d1117'};"
 							></div>
 						</div>
 					{/each}
@@ -688,7 +856,7 @@
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<div
 							class="port-btn absolute flex items-center justify-center"
-							style="right:{-PORT_R}px; top:{BLOCK_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2 - PORT_R}px; width:{PORT_R * 2}px; height:{PORT_R * 2}px; z-index:10;"
+							style="right:{-PORT_R}px; top:{BLOCK_HEADER + blockParamH(block) + PORT_ROW_H * i + PORT_ROW_H / 2 - PORT_R}px; width:{PORT_R * 2}px; height:{PORT_R * 2}px; z-index:10;"
 							role="button"
 							tabindex="0"
 							aria-label="Output port {port.label}"
@@ -696,7 +864,7 @@
 						>
 							<div
 								class="h-full w-full rounded-full border-2 transition-all hover:scale-125"
-								style="border-color:#4ade80; background:{connectingFrom?.blockId === block.id && connectingFrom?.portId === port.id ? '#14532d' : '#0d1117'};"
+								style="border-color:{PORT_TYPE_COLORS[port.dataType ?? 'any']}; background:{connectingFrom?.blockId === block.id && connectingFrom?.portId === port.id ? '#14532d' : '#0d1117'};"
 							></div>
 						</div>
 					{/each}
@@ -704,6 +872,37 @@
 			{/each}
 
 			</div><!-- end transform wrapper -->
+
+			<!-- FAB: Zoom controls -->
+			<div class="absolute bottom-4 right-4 z-20 flex flex-col gap-2">
+				<button
+					onclick={() => zoomAround(1.2)}
+					class="flex h-9 w-9 items-center justify-center rounded-full bg-gray-800 border border-gray-700 text-gray-300 shadow-lg transition-all hover:bg-gray-700 hover:text-white hover:scale-110"
+					title="ซูมเข้า"
+				>
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+					</svg>
+				</button>
+				<button
+					onclick={focusCanvas}
+					class="flex h-9 w-9 items-center justify-center rounded-full bg-gray-800 border border-gray-700 text-gray-300 shadow-lg transition-all hover:bg-gray-700 hover:text-white hover:scale-110"
+					title="Focus"
+				>
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V5a1 1 0 011-1h3M4 16v3a1 1 0 001 1h3m10-14h3a1 1 0 011 1v3m-4 10h3a1 1 0 001-1v-3" />
+					</svg>
+				</button>
+				<button
+					onclick={() => zoomAround(0.8)}
+					class="flex h-9 w-9 items-center justify-center rounded-full bg-gray-800 border border-gray-700 text-gray-300 shadow-lg transition-all hover:bg-gray-700 hover:text-white hover:scale-110"
+					title="ซูมออก"
+				>
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+					</svg>
+				</button>
+			</div>
 
 			<!-- Empty canvas hint -->
 			{#if canvasBlocks.length === 0}
@@ -831,7 +1030,9 @@
 		{#if connectingFrom}
 			<span class="text-yellow-500">กำลังเชื่อมต่อ...</span>
 		{/if}
-		{#if selectedConnId}
+		{#if selectedBlockId}
+			<span class="text-blue-400">บล็อกถูกเลือก — กด <kbd class="rounded bg-gray-700 px-1 font-mono">Delete</kbd> เพื่อลบ</span>
+		{:else if selectedConnId}
 			<span class="text-yellow-400">เส้นถูกเลือก — กด <kbd class="rounded bg-gray-700 px-1 font-mono">Delete</kbd> เพื่อลบ หรือลากจุดสีเหลืองเพื่อย้าย</span>
 		{/if}
 	</footer>
