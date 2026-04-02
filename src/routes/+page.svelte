@@ -1,5 +1,5 @@
 <script lang="ts">
-	import FlowEditor from '$lib/flowcode/FlowEditor.svelte';
+	import FlowEditor, { type FlowEditorEvent } from '$lib/flowcode/FlowEditor.svelte';
 	import ConfirmDialog, { type ConfirmOptions } from '$lib/components/ConfirmDialog.svelte';
 	import {
 		FilePlus, FolderOpen, Save, CirclePlay, SquareCode,
@@ -11,13 +11,22 @@
 	let showConsole = $state(false);
 	let showUserMenu = $state(false);
 	let status = $state<{
-		blockCount: number;
-		connCount: number;
-		zoom: number;
-		isConnecting: boolean;
-		selectedBlock: boolean;
-		selectedConn: boolean;
+		blockCount: number; connCount: number; zoom: number;
 	}>();
+
+	function handleEditorChange(event: FlowEditorEvent) {
+		status = {
+			blockCount: editor!.blockList().length,
+			connCount: editor!.connectionList().length,
+			zoom: editor!.getZoom(),
+		};
+		if (event !== 'block:move') {
+			const json = editor!.exportJson();
+			localStorage.setItem('flowcode-project', json);
+		}
+
+		cCode = editor?.generateCode() || '';
+	}
 	let confirmDialogOpen = $state(false);
 	let confirmDialogOption = $state<ConfirmOptions>({});
 
@@ -78,7 +87,7 @@
 	}
 
 	async function runProject() {
-		const data = cCode;
+		const data = editor?.generateCode() || '';
 		if ('showSaveFilePicker' in window) {
 			try {
 				const handle = await (window as any).showSaveFilePicker({
@@ -100,10 +109,11 @@
 		}
 	}
 
-	function blocksChangeCallback() {
-		const json = editor?.exportJson();
-		if (json) localStorage.setItem('flowcode-project', json);
-	}
+	// Auto load project from Local Storage
+	/*$effect.pre(() => {
+		const saved = localStorage.getItem('flowcode-project');
+		if (saved) editor?.importJson(saved);
+	});*/
 </script>
 
 <ConfirmDialog
@@ -225,9 +235,7 @@
 	<!-- ─── FlowEditor (canvas + palette) ──────────────────────────── -->
 	<FlowEditor
 		bind:this={editor}
-		bind:code={cCode}
-		bind:status
-		onchange={blocksChangeCallback}
+		onchange={handleEditorChange}
 	/>
 
 	<!-- ─── C Code Console ──────────────────────────────────────────── -->
@@ -257,13 +265,5 @@
 		<span>บล็อก: <span class="text-gray-400">{status?.blockCount ?? 0}</span></span>
 		<span>การเชื่อมต่อ: <span class="text-gray-400">{status?.connCount ?? 0}</span></span>
 		<span class="ml-auto text-gray-500">{Math.round((status?.zoom ?? 1) * 100)}%</span>
-		{#if status?.isConnecting}
-			<span class="text-yellow-500">กำลังเชื่อมต่อ...</span>
-		{/if}
-		{#if status?.selectedBlock}
-			<span class="text-blue-400">บล็อกถูกเลือก — กด <kbd class="rounded bg-gray-700 px-1 font-mono">Delete</kbd> เพื่อลบ</span>
-		{:else if status?.selectedConn}
-			<span class="text-yellow-400">เส้นถูกเลือก — กด <kbd class="rounded bg-gray-700 px-1 font-mono">Delete</kbd> เพื่อลบ หรือลากจุดสีเหลืองเพื่อย้าย</span>
-		{/if}
 	</footer>
 </div>

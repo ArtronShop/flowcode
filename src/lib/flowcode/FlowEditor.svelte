@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import {
 		blockCategories,
 	} from '$lib/blocks/index.js';
@@ -19,22 +20,24 @@
 	interface Props {
 		/** หมวดหมู่บล็อกที่แสดงในแผง Palette (default: ทุก category) */
 		categories?: BlockCategory[];
-		/** C code ที่ generate ได้ — bindable เพื่อให้ parent อ่านได้ */
-		code?: string;
-		/** เรียกทุกครั้งที่ blocks หรือ connections เปลี่ยน (ย้าย / เพิ่ม / ลบ / แก้ param) */
-		onchange?: () => void;
-		/** ข้อมูลสำหรับ Status bar — bindable */
-		status?: {
-			blockCount: number;
-			connCount: number;
-			zoom: number;
-			isConnecting: boolean;
-			selectedBlock: boolean;
-			selectedConn: boolean;
-		};
+		/** เรียกทุกครั้งที่ state เปลี่ยน */
+		onchange?: (event: FlowEditorEvent) => void;
 	}
 
-	let { categories = blockCategories, code = $bindable(''), onchange, status = $bindable() }: Props = $props();
+	export type FlowEditorEvent =
+		| 'block:add'
+		| 'block:move'
+		| 'block:delete'
+		| 'block:param'
+		| 'block:focus'
+		| 'block:blur'
+		| 'conn:add'
+		| 'conn:delete'
+		| 'conn:focus'
+		| 'conn:blur'
+		| 'project:load';
+
+	let { categories = blockCategories, onchange }: Props = $props();
 
 	/** map จาก typeId → BlockDef ที่ใช้งานอยู่ */
 	const defMap = $derived<Record<string, BlockDef>>(
@@ -132,26 +135,6 @@
 			.filter((cat) => cat.blocks.length > 0)
 	);
 
-	// ─── Code generation ─────────────────────────────────────────────
-	const cCode = $derived(flowToC(canvasBlocks, connections, defMap));
-	$effect(() => { code = cCode; });
-	$effect(() => {
-		// track both states — fire onchange whenever either changes
-		void canvasBlocks;
-		void connections;
-		onchange?.();
-	});
-	$effect(() => {
-		status = {
-			blockCount: canvasBlocks.length,
-			connCount: connections.length,
-			zoom,
-			isConnecting: connectingFrom !== null,
-			selectedBlock: selectedBlockId !== null,
-			selectedConn: selectedConnId !== null,
-		};
-	});
-
 	// ─── Palette drag ────────────────────────────────────────────────
 	function handlePaletteMouseDown(e: MouseEvent, block: BlockDef) {
 		e.preventDefault();
@@ -187,6 +170,7 @@
 		];
 		draggingFromPalette = null;
 		paletteGhost = null;
+		onchange?.('block:add');
 	}
 
 	// ─── Block drag ──────────────────────────────────────────────────
@@ -197,6 +181,7 @@
 		(document.activeElement as HTMLElement)?.blur();
 		selectedBlockId = block.id;
 		selectedConnId = null;
+		onchange?.('block:focus');
 		const cc = toCanvasCoords(e.clientX, e.clientY);
 		draggingBlock = {
 			id: block.id,
@@ -234,6 +219,7 @@
 						}
 					: b
 			);
+			onchange?.('block:move');
 		}
 	}
 
@@ -287,9 +273,13 @@
 
 	function handleCanvasClick() {
 		connectingFrom = null;
+		const hadBlock = selectedBlockId !== null;
+		const hadConn = selectedConnId !== null;
 		selectedConnId = null;
 		selectedBlockId = null;
 		(document.activeElement as HTMLElement)?.blur();
+		if (hadBlock) onchange?.('block:blur');
+		else if (hadConn) onchange?.('conn:blur');
 	}
 
 	function handleWheel(e: WheelEvent) {
@@ -344,10 +334,14 @@
 			}
 		}
 		if (e.key === 'Escape') {
+			const hadBlock = selectedBlockId !== null;
+			const hadConn = selectedConnId !== null;
 			selectedBlockId = null;
 			selectedConnId = null;
 			connectingFrom = null;
 			draggingConnEnd = null;
+			if (hadBlock) onchange?.('block:blur');
+			else if (hadConn) onchange?.('conn:blur');
 		}
 	}
 
@@ -388,6 +382,7 @@
 					toPortId: portId
 				}
 			];
+			onchange?.('conn:add');
 		}
 		connectingFrom = null;
 	}
@@ -399,10 +394,12 @@
 			(c) => c.fromBlockId !== blockId && c.toBlockId !== blockId
 		);
 		if (connectingFrom?.blockId === blockId) connectingFrom = null;
+		onchange?.('block:delete');
 	}
 
 	export function deleteConnection(connId: string) {
 		connections = connections.filter((c) => c.id !== connId);
+		onchange?.('conn:delete');
 	}
 
 	function updateBlockParam(blockId: string, paramId: string, raw: string) {
@@ -418,6 +415,7 @@
 		canvasBlocks = canvasBlocks.map((b) =>
 			b.id === blockId ? { ...b, params: { ...(b.params ?? {}), [paramId]: value } } : b
 		);
+		onchange?.('block:param');
 	}
 
 	// ─── Port position helpers ───────────────────────────────────────
@@ -473,6 +471,11 @@
 		return connections;
 	}
 
+	export function getZoom() { return zoom; }
+	export function getIsConnecting() { return connectingFrom !== null; }
+	export function getSelectedBlock() { return selectedBlockId !== null; }
+	export function getSelectedConn() { return selectedConnId !== null; }
+
 	export function exportJson() {
 		return JSON.stringify({ canvasBlocks, connections }, null, 2);
 	}
@@ -486,6 +489,7 @@
 				const ids = canvasBlocks.map((b) => parseInt(b.id.replace('block-', '')) || 0);
 				const connIds = connections.map((c) => parseInt(c.id.replace('conn-', '')) || 0);
 				nextId = Math.max(0, ...ids, ...connIds) + 1;
+				onchange?.('project:load');
 			}
 		} catch {
 			console.error('ไม่สามารถโหลดไฟล์โปรเจคได้');
@@ -495,6 +499,11 @@
 	export function clear() {
 		canvasBlocks = [];
 		connections = [];
+	}
+
+	// ─── Code generation ─────────────────────────────────────────────
+	export function generateCode() {
+		return flowToC(canvasBlocks, connections, defMap);
 	}
 </script>
 
@@ -549,8 +558,8 @@
 					{@const isDraggingThis = draggingConnEnd?.connId === conn.id}
 					<g
 						style="pointer-events:stroke; cursor:pointer;"
-						onclick={(e) => { e.stopPropagation(); selectedConnId = conn.id; }}
-						onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); selectedConnId = conn.id; } }}
+						onclick={(e) => { e.stopPropagation(); selectedConnId = conn.id; onchange?.('conn:focus'); }}
+						onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); selectedConnId = conn.id; onchange?.('conn:focus'); } }}
 						role="button"
 						tabindex="0"
 						aria-label="เลือกการเชื่อมต่อ"
@@ -804,10 +813,18 @@
 			</div>
 		{/if}
 
-		<!-- Connecting hint -->
+		<!-- Hints -->
 		{#if connectingFrom}
 			<div class="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-yellow-500/20 border border-yellow-500/40 px-4 py-1.5">
-				<p class="text-xs text-yellow-300">คลิกที่พอร์ต Input (สีน้ำเงิน) เพื่อเชื่อมต่อ — คลิกพื้นที่ว่างเพื่อยกเลิก</p>
+				<p class="text-xs text-yellow-300">ปล่อยเมาส์ที่จุด Input เพื่อเชื่อมต่อ — ปล่อยเมาส์พื้นที่ว่างเพื่อยกเลิก</p>
+			</div>
+		{:else if selectedBlockId}
+			<div class="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-blue-500/20 border border-blue-500/40 px-4 py-1.5">
+				<p class="text-xs text-blue-300">บล็อกถูกเลือก — กด <kbd class="rounded bg-blue-900/60 px-1 font-mono">Delete</kbd> เพื่อลบ</p>
+			</div>
+		{:else if selectedConnId}
+			<div class="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-yellow-500/20 border border-yellow-500/40 px-4 py-1.5">
+				<p class="text-xs text-yellow-300">เส้นถูกเลือก — กด <kbd class="rounded bg-yellow-900/60 px-1 font-mono">Delete</kbd> เพื่อลบ หรือลากจุดสีเหลืองเพื่อย้าย</p>
 			</div>
 		{/if}
 	</div>
@@ -873,6 +890,9 @@
 
 
 <style>
+	.conn-group {
+		outline: none;
+	}
 	.conn-group:hover .conn-line {
 		stroke: #f87171;
 		marker-end: url(#arrow-hover);
