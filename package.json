@@ -7,6 +7,8 @@
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
+		"tauri:dev": "tauri dev",
+		"tauri:build": "tauri build",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
@@ -25,6 +27,7 @@
 		"@tailwindcss/forms": "^0.5.11",
 		"@tailwindcss/typography": "^0.5.19",
 		"@tailwindcss/vite": "^4.1.18",
+		"@tauri-apps/cli": "^2.10.1",
 		"@types/node": "^24",
 		"better-auth": "~1.4.21",
 		"drizzle-kit": "^0.31.8",
@@ -35,5 +38,9 @@
 		"tailwindcss": "^4.1.18",
 		"typescript": "^5.9.3",
 		"vite": "^7.3.1"
+	},
+	"dependencies": {
+		"@tauri-apps/api": "^2.10.1",
+		"lucide-svelte": "^1.0.1"
 	}
 }

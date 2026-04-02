@@ -3,6 +3,9 @@
     "allow": [
       "Bash(npm run:*)",
       "Bash(node -e \":*)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\sonth\\GitHub\\ui-click\\src\\lib"
     ]
   }
 }
