@@ -10,8 +10,9 @@ export const dataCategory: BlockCategory = {
 			color: '#3b82f6',
 			icon: '#',
 			category: 'data',
+			description: 'ค่าคงที่ประเภท Integer (จำนวนเต็ม) ใช้ต่อเข้า input ที่รับค่า int, long, float หรือ double',
 			inputs: [],
-			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'int' }],
+			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'int', description: 'ค่า Integer ที่กำหนด' }],
 			params: [
 				{ id: 'value', type: 'number', default: '0', validation: (n) => Math.trunc(n) }
 			],
@@ -24,8 +25,9 @@ export const dataCategory: BlockCategory = {
 			color: '#8b5cf6',
 			icon: '#.',
 			category: 'data',
+			description: 'ค่าคงที่ประเภท Float (ทศนิยม 32-bit) จะมี suffix "f" ต่อท้ายอัตโนมัติ',
 			inputs: [],
-			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'float' }],
+			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'float', description: 'ค่า Float ที่กำหนด (เช่น 3.14f)' }],
 			params: [
 				{ id: 'value', type: 'number', default: '0.0' }
 			],
@@ -41,8 +43,9 @@ export const dataCategory: BlockCategory = {
 			color: '#ef4444',
 			icon: '"',
 			category: 'data',
+			description: 'ค่าคงที่ประเภท String (ข้อความ) จะถูก escape อัตโนมัติ',
 			inputs: [],
-			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'String' }],
+			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'String', description: 'ข้อความที่กำหนด (String literal)' }],
 			params: [
 				{ id: 'value', type: 'text', default: '' }
 			],
@@ -58,8 +61,9 @@ export const dataCategory: BlockCategory = {
 			color: '#f59e0b',
 			icon: '✓',
 			category: 'data',
+			description: 'ค่าคงที่ประเภท Boolean (true หรือ false)',
 			inputs: [],
-			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'bool' }],
+			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'bool', description: 'ค่า Boolean ที่กำหนด (true หรือ false)' }],
 			params: [
 				{
 					id: 'value',

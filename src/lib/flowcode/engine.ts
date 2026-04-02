@@ -21,16 +21,26 @@ export function flowToC(
 		return '// ไม่พบบล็อก Trigger\n// ลาก Trigger block มาวางใน Canvas ก่อน';
 	}
 
-	const lines: string[] = ['#include <Arduino.h>', '{{FUNCTION_DECL}}', '', 'void setup() {'];
 	const visited = new Set<string>();
 	const INDENT = '  ';
-	const functionDecls: string[] = [];
-	const functionDefs: string[] = [];
+	const preprocessors = new Set<string>(['#include <Arduino.h>']);
+	const globals = new Set<string>();
+	const functionDecls = new Map<string, string>(); // header → declaration
+	const functionDefs = new Map<string, string>();   // header → full def
 	const safeId = (id: string) => id.replace(/-/g, '_');
 
 	function registerFunction(header: string, body: string, declaration?: string) {
-		if (declaration) functionDecls.push(declaration);
-		functionDefs.push(`${header} {\n${body}\n}`);
+		if (functionDefs.has(header)) return;
+		if (declaration) functionDecls.set(header, declaration);
+		functionDefs.set(header, `${header} {\n${body}\n}`);
+	}
+
+	function registerPreprocessor(directive: string) {
+		preprocessors.add(directive.trim());
+	}
+
+	function registerGlobal(declaration: string) {
+		globals.add(declaration.trim());
 	}
 
 	function resolveInput(blockId: string, portId: string): string | null {
@@ -86,6 +96,8 @@ export function flowToC(
 				captureCode: (portId, baseDepth) =>
 					captureCode(blockId, portId, baseDepth ?? depth + 1),
 				registerFunction,
+				registerPreprocessor,
+				registerGlobal,
 				resolveInput: (portId) => resolveInput(blockId, portId)
 			});
 		} catch (err) {
@@ -110,16 +122,37 @@ export function flowToC(
 		}
 	}
 
+	const setupLines: string[] = ['void setup() {'];
 	for (const trigger of triggerBlocks) {
-		traverseTo(trigger.id, 1, lines, visited);
+		traverseTo(trigger.id, 1, setupLines, visited);
 	}
-	lines.push('}');
-	lines.push('');
-	lines.push('void loop() { }');
-	if (functionDefs.length > 0) {
-		lines.push('');
-		lines.push(...functionDefs);
+	setupLines.push('}');
+
+	const sections: string[] = [];
+
+	// 1. preprocessor directives
+	sections.push([...preprocessors].join('\n'));
+
+	// 2. forward declarations
+	if (functionDecls.size > 0) {
+		sections.push([...functionDecls.values()].join('\n'));
 	}
-	const declBlock = functionDecls.length > 0 ? functionDecls.join('\n') : '';
-	return lines.join('\n').replace('{{FUNCTION_DECL}}', declBlock);
+
+	// 3. global variables
+	if (globals.size > 0) {
+		sections.push([...globals].join('\n'));
+	}
+
+	// 4. setup()
+	sections.push(setupLines.join('\n'));
+
+	// 5. loop()
+	sections.push('void loop() { }');
+
+	// 6. function definitions
+	if (functionDefs.size > 0) {
+		sections.push([...functionDefs.values()].join('\n\n'));
+	}
+
+	return sections.join('\n\n');
 }

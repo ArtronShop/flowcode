@@ -57,6 +57,7 @@ export type Port = {
 	type: 'input' | 'output';
 	label: string;
 	dataType: DataType;
+	description?: string;
 };
 
 export type CanvasBlock = {
@@ -123,33 +124,41 @@ export type CodeGenContext = {
 	 */
 	registerFunction: (header: string, body: string, declaration?: string) => void;
 	/**
+	 * ลงทะเบียน preprocessor directive — emit บนสุดของไฟล์ (dedup อัตโนมัติ)
+	 * เช่น '#include <Wire.h>' หรือ '#define LED_PIN 2'
+	 */
+	registerPreprocessor: (directive: string) => void;
+	/**
+	 * ลงทะเบียน global variable — emit ก่อน setup()
+	 * เช่น 'int counter = 0;'
+	 */
+	registerGlobal: (declaration: string) => void;
+	/**
 	 * คืนชื่อ variable / expression ของบล็อกที่ต่อเข้ามาทาง input port นี้
 	 * ถ้าไม่มีการต่อเส้น จะ throw เพื่อให้ toCode() จัดการ fallback เอง
 	 */
 	resolveInput: (portId: string) => string | null;
 };
 
-export type ParamOption = {
+type PramBase = {
 	id: string;
 	label?: string;
-	type: 'option';
-	options: { label: string; value: string }[];
+	description?: string;
 	default?: string;
 };
 
-export type ParamText = {
-	id: string;
-	label?: string;
+export type ParamOption = PramBase & {
+	type: 'option';
+	options: { label: string; value: string }[];
+};
+
+export type ParamText = PramBase & {
 	type: 'text';
-	default?: string;
 	validation?: (text: string) => string;
 };
 
-export type ParamNumber = {
-	id: string;
-	label?: string;
+export type ParamNumber = PramBase & {
 	type: 'number';
-	default?: string;
 	validation?: (n: number) => number;
 };
 
@@ -168,6 +177,7 @@ export type BlockDef = {
 	color: string;
 	icon: string;
 	category: string;
+	description?: string;
 	inputs: Port[];
 	outputs: Port[];
 	/** พารามิเตอร์ที่แก้ไขได้บนบล็อก (array, keyed by id) */

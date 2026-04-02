@@ -1,10 +1,25 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import FlowEditor, { type FlowEditorEvent } from '$lib/flowcode/FlowEditor.svelte';
 	import ConfirmDialog, { type ConfirmOptions } from '$lib/components/ConfirmDialog.svelte';
+	import { blockCategories } from '$lib/blocks/index.js';
+	import type { BlockDef, CanvasBlock } from '$lib/blocks/types.js';
 	import {
 		FilePlus, FolderOpen, Save, CirclePlay, SquareCode,
-		User, Folder, LogOut, Copy, Terminal
+		User, Folder, LogOut, Copy, Terminal,
+		Files, Puzzle, CircleQuestionMark
 	} from 'lucide-svelte';
+
+	const blockDefMap: Record<string, BlockDef> = Object.fromEntries(
+		blockCategories.flatMap((c) => c.blocks).map((b) => [b.id, b])
+	);
+
+	type SidePanel = 'files' | 'extensions' | 'help' | null;
+	let activePanel = $state<SidePanel>(null);
+
+	function togglePanel(panel: SidePanel) {
+		activePanel = activePanel === panel ? null : panel;
+	}
 
 	let editor = $state<FlowEditor | null>(null);
 	let cCode = $state('');
@@ -14,19 +29,22 @@
 		blockCount: number; connCount: number; zoom: number;
 	}>();
 
+	let focusedBlock = $state<BlockDef | null>(null);
+
 	function handleEditorChange(event: FlowEditorEvent) {
 		status = {
 			blockCount: editor!.blockList().length,
 			connCount: editor!.connectionList().length,
 			zoom: editor!.getZoom(),
 		};
-		if (event !== 'block:move') {
-			const json = editor!.exportJson();
-			localStorage.setItem('flowcode-project', json);
-		}
+
+		// Save to Local Storage
+		const json = editor!.exportJson();
+		localStorage.setItem('flowcode-project', json);
 
 		cCode = editor?.generateCode() || '';
 	}
+	
 	let confirmDialogOpen = $state(false);
 	let confirmDialogOption = $state<ConfirmOptions>({});
 
@@ -110,10 +128,10 @@
 	}
 
 	// Auto load project from Local Storage
-	/*$effect.pre(() => {
+	onMount(() => {
 		const saved = localStorage.getItem('flowcode-project');
 		if (saved) editor?.importJson(saved);
-	});*/
+	});
 </script>
 
 <ConfirmDialog
@@ -130,7 +148,7 @@
 	<!-- ─── Top Navbar ──────────────────────────────────────────────── -->
 	<header class="z-20 flex items-center justify-between border-b border-gray-700/60 bg-gray-900 px-4 py-2 shadow-lg">
 		<div class="flex items-center gap-1">
-			<span class="mr-3 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-base font-bold text-transparent">
+			<span class="mr-3 bg-linear-to-r from-blue-400 to-purple-400 bg-clip-text text-base font-bold text-transparent">
 				FlowCode
 			</span>
 
@@ -193,7 +211,7 @@
 				class="h-8 w-8 overflow-hidden rounded-full ring-2 ring-transparent transition-all hover:ring-blue-500 focus:outline-none focus:ring-blue-500"
 				aria-label="เมนูผู้ใช้"
 			>
-				<div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 text-sm font-bold">
+				<div class="flex h-full w-full items-center justify-center bg-linear-to-br from-blue-500 to-purple-600 text-sm font-bold">
 					S
 				</div>
 			</button>
@@ -202,7 +220,7 @@
 				<div class="absolute right-0 top-11 w-52 overflow-hidden rounded-xl border border-gray-700 bg-gray-800 shadow-2xl">
 					<div class="border-b border-gray-700 px-4 py-3">
 						<div class="flex items-center gap-3">
-							<div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-sm font-bold">
+							<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-blue-500 to-purple-600 text-sm font-bold">
 								S
 							</div>
 							<div>
@@ -232,11 +250,177 @@
 		</div>
 	</header>
 
-	<!-- ─── FlowEditor (canvas + palette) ──────────────────────────── -->
-	<FlowEditor
-		bind:this={editor}
-		onchange={handleEditorChange}
-	/>
+	<!-- ─── Main area (sidebar + editor) ──────────────────────────── -->
+	<div class="flex flex-1 overflow-hidden">
+
+		<!-- ── Icon rail ───────────────────────────────────────────── -->
+		<nav class="flex w-12 flex-col items-center gap-1 border-r border-gray-700/60 bg-gray-900 py-2">
+			<button
+				onclick={() => togglePanel('files')}
+				class="flex h-9 w-9 items-center justify-center rounded-lg transition-colors {activePanel === 'files' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-700 hover:text-white'}"
+				title="จัดการไฟล์"
+			>
+				<Files size={18} />
+			</button>
+			<button
+				onclick={() => togglePanel('extensions')}
+				class="flex h-9 w-9 items-center justify-center rounded-lg transition-colors {activePanel === 'extensions' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-700 hover:text-white'}"
+				title="ติดตั้งบล็อกเสริม"
+			>
+				<Puzzle size={18} />
+			</button>
+			<div class="flex-1"></div>
+			<button
+				onclick={() => { togglePanel('help'); focusedBlock = null; }}
+				class="flex h-9 w-9 items-center justify-center rounded-lg transition-colors {activePanel === 'help' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-700 hover:text-white'}"
+				title="วิธีใช้"
+			>
+				<CircleQuestionMark size={18} />
+			</button>
+		</nav>
+
+		<!-- ── Side panel ──────────────────────────────────────────── -->
+		{#if activePanel}
+			<div class="flex w-64 flex-col border-r border-gray-700/60 bg-gray-900">
+				<!-- Panel header -->
+				<div class="flex items-center justify-between border-b border-gray-700/60 px-4 py-3">
+					<span class="text-xs font-semibold uppercase tracking-widest text-gray-400">
+						{#if activePanel === 'files'}จัดการไฟล์
+						{:else if activePanel === 'extensions'}บล็อกเสริม
+						{:else}วิธีใช้
+						{/if}
+					</span>
+					<button onclick={() => activePanel = null} aria-label="ปิด" class="text-gray-600 hover:text-gray-300 transition-colors">
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+						</svg>
+					</button>
+				</div>
+
+				<!-- Panel content -->
+				<div class="flex-1 overflow-y-auto p-3">
+					{#if activePanel === 'files'}
+						<div class="space-y-1">
+							<button onclick={newProject} class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-gray-300 transition-colors hover:bg-gray-700 hover:text-white">
+								<FilePlus size={15} class="shrink-0 text-gray-500" />สร้างโปรเจคใหม่
+							</button>
+							<button onclick={openProject} class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-gray-300 transition-colors hover:bg-gray-700 hover:text-white">
+								<FolderOpen size={15} class="shrink-0 text-gray-500" />เปิดโปรเจค
+							</button>
+							<button onclick={saveProject} class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-gray-300 transition-colors hover:bg-gray-700 hover:text-white">
+								<Save size={15} class="shrink-0 text-gray-500" />บันทึกโปรเจค
+							</button>
+							<button onclick={runProject} class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-gray-300 transition-colors hover:bg-gray-700 hover:text-white">
+								<CirclePlay size={15} class="shrink-0 text-gray-500" />ส่งออก .ino
+							</button>
+						</div>
+					{:else if activePanel === 'extensions'}
+						<p class="mb-3 text-[11px] text-gray-500">ติดตั้งบล็อกเสริมจากไฟล์ <code class="rounded bg-gray-800 px-1">.flowext.js</code></p>
+						<button
+							onclick={() => {
+								const input = document.createElement('input');
+								input.type = 'file';
+								input.accept = '.js,.flowext.js';
+								input.click();
+							}}
+							class="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-600 px-3 py-4 text-xs text-gray-400 transition-colors hover:border-blue-500 hover:text-blue-400"
+						>
+							<Puzzle size={16} />
+							เลือกไฟล์ Extension
+						</button>
+					{:else if activePanel === 'help'}
+						{#if focusedBlock}
+							<!-- Block detail view -->
+							<div class="space-y-3 text-xs text-gray-400">
+								<div class="flex items-center gap-2">
+									<span class="text-lg leading-none">{focusedBlock.icon}</span>
+									<span class="font-semibold text-white">{focusedBlock.name}</span>
+									<span class="ml-auto rounded bg-gray-700 px-1.5 py-0.5 font-mono text-[9px] text-gray-400">{focusedBlock.category}</span>
+								</div>
+								{#if focusedBlock.description}
+									<p class="leading-relaxed text-gray-300">{focusedBlock.description}</p>
+								{/if}
+								{#if focusedBlock.inputs.length > 0}
+									<div>
+										<p class="mb-1.5 font-semibold text-gray-400">Inputs</p>
+										<ul class="space-y-1.5">
+											{#each focusedBlock.inputs as port}
+												<li class="flex flex-col gap-0.5">
+													<span class="font-medium text-gray-300">{port.label} <span class="font-mono text-[9px] text-gray-500">({port.dataType})</span></span>
+													{#if port.description}
+														<span class="text-gray-500">{port.description}</span>
+													{/if}
+												</li>
+											{/each}
+										</ul>
+									</div>
+								{/if}
+								{#if focusedBlock.outputs.length > 0}
+									<div>
+										<p class="mb-1.5 font-semibold text-gray-400">Outputs</p>
+										<ul class="space-y-1.5">
+											{#each focusedBlock.outputs as port}
+												<li class="flex flex-col gap-0.5">
+													<span class="font-medium text-gray-300">{port.label} <span class="font-mono text-[9px] text-gray-500">({port.dataType})</span></span>
+													{#if port.description}
+														<span class="text-gray-500">{port.description}</span>
+													{/if}
+												</li>
+											{/each}
+										</ul>
+									</div>
+								{/if}
+								{#if focusedBlock.params && focusedBlock.params.length > 0}
+									<div>
+										<p class="mb-1.5 font-semibold text-gray-400">Parameter</p>
+										<ul class="space-y-1.5">
+											{#each focusedBlock.params as params}
+												<li class="flex flex-col gap-0.5">
+													<span class="font-medium text-gray-300">{params.label} <span class="font-mono text-[9px] text-gray-500">({params.type})</span></span>
+													{#if params.description}
+														<span class="text-gray-500">{params.description}</span>
+													{/if}
+												</li>
+											{/each}
+										</ul>
+									</div>
+								{/if}
+							</div>
+						{:else}
+							<!-- General help -->
+							<div class="space-y-4 text-xs text-gray-400">
+								<p class="text-[11px] text-gray-500">คลิกที่บล็อกบน Canvas เพื่อดูรายละเอียด</p>
+								<div>
+									<p class="mb-1.5 font-semibold text-gray-300">การใช้งานพื้นฐาน</p>
+									<ul class="space-y-1.5 leading-relaxed">
+										<li>• ลากบล็อกจากแผง <span class="text-white">Blocks</span> มาวางบน Canvas</li>
+										<li>• คลิกที่พอร์ต Output แล้วลากไปยังพอร์ต Input เพื่อเชื่อมต่อ</li>
+										<li>• คลิกที่บล็อกเพื่อเลือก กด <kbd class="rounded bg-gray-700 px-1 font-mono">Del</kbd> เพื่อลบ</li>
+										<li>• คลิกขวาที่บล็อกเพื่อดูเมนูเพิ่มเติม</li>
+									</ul>
+								</div>
+								<div>
+									<p class="mb-1.5 font-semibold text-gray-300">Viewport</p>
+									<ul class="space-y-1.5 leading-relaxed">
+										<li>• เลื่อนล้อเมาส์เพื่อซูม</li>
+										<li>• ลากพื้นที่ว่างเพื่อเลื่อน Canvas</li>
+										<li>• กดปุ่ม Focus เพื่อให้แสดงบล็อกทั้งหมด</li>
+									</ul>
+								</div>
+							</div>
+						{/if}
+					{/if}
+				</div>
+			</div>
+		{/if}
+
+		<!-- ── FlowEditor ───────────────────────────────────────────── -->
+		<FlowEditor
+			bind:this={editor}
+			onchange={handleEditorChange}
+			onhelp={(blockInfo: BlockDef) => { focusedBlock = blockInfo; activePanel = 'help'; }}
+		/>
+	</div>
 
 	<!-- ─── C Code Console ──────────────────────────────────────────── -->
 	{#if showConsole}

@@ -10,8 +10,9 @@ export const triggerCategory: BlockCategory = {
 			color: '#22c55e',
 			icon: '▶',
 			category: 'trigger',
+			description: 'รันโค้ดครั้งเดียวเมื่อบอร์ดเปิดหรือรีเซ็ต ใช้สำหรับตั้งค่าเริ่มต้น (Arduino setup())',
 			inputs: [],
-			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void' }],
+			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'สายลำดับการทำงานถัดไป' }],
 			toCode({ block, safeId, captureCode, registerFunction, pad }) {
 				/*const id = safeId(block.id);
 				const fn = `task_${id}`;
@@ -36,8 +37,9 @@ export const triggerCategory: BlockCategory = {
 			color: '#16a34a',
 			icon: '⏰',
 			category: 'trigger',
+			description: 'รันโค้ดซ้ำตามช่วงเวลาที่กำหนด โดยใช้ FreeRTOS Task ทำงานอยู่เบื้องหลัง',
 			inputs: [],
-			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void' }],
+			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'สายลำดับการทำงานที่รันซ้ำในแต่ละรอบเวลา' }],
 			params: [
 				/*{
 					id: 'interval',
@@ -59,7 +61,8 @@ export const triggerCategory: BlockCategory = {
 						{ label: "every 10 mins", value: "10 * 60 * 1000" },
 						{ label: "every 30 mins", value: "30 * 60 * 1000" },
 						{ label: "every 1 hours", value: "60 * 60 * 1000" },
-					]
+					],
+					description: 'ช่วงเวลาที่ทำซ้ำ (1 วินาที ถึง 1 ชั่วโมง)'
 				}
 			],
 			toCode({ block, params, safeId, captureCode, registerFunction, pad }) {
@@ -92,8 +95,9 @@ export const triggerCategory: BlockCategory = {
 			color: '#16a34a',
 			icon: '🔔',
 			category: 'trigger',
+			description: 'รันโค้ดทันทีเมื่อมีสัญญาณ Interrupt บนขา GPIO ที่กำหนด (attachInterrupt)',
 			inputs: [],
-			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void' }],
+			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'สายลำดับการทำงานที่รันเมื่อเกิด Interrupt' }],
 			params: [
 				{
 					id: 'pin',
@@ -101,6 +105,7 @@ export const triggerCategory: BlockCategory = {
 					type: 'number',
 					default: '2',
 					validation: (n: number) => Math.trunc(Math.max(0, n)),
+					description: 'ขา GPIO ที่ต้องการตรวจจับการเปลี่ยนแปลง',
 				},
 				{
 					id: 'mode',
@@ -111,7 +116,8 @@ export const triggerCategory: BlockCategory = {
 						{ label: "CHANGE", value: "CHANGE" },
 						{ label: "RISING", value: "RISING" },
 						{ label: "FALLING", value: "FALLING" },
-					]
+					],
+					description: 'รูปแบบการตรวจจับ (LOW / CHANGE / RISING / FALLING)'
 				}
 			],
 			toCode({ block, params, safeId, captureCode, registerFunction, pad }) {
@@ -139,11 +145,12 @@ export const triggerCategory: BlockCategory = {
 			color: '#22c55e',
 			icon: '💼',
 			category: 'trigger',
+			description: 'สร้าง FreeRTOS Task ที่รันอยู่เบื้องหลังพร้อมกำหนด Stack size และ Priority',
 			inputs: [],
-			outputs: [{ id: 'out', type: 'output', label: 'Next', dataType: 'void' }],
+			outputs: [{ id: 'out', type: 'output', label: 'Next', dataType: 'void', description: 'สายลำดับการทำงานภายใน Task' }],
 			params: [
-				{ id: 'stack', label: 'Stack', type: 'number', default: '8192' },
-				{ id: 'priority', label: 'Priority', type: 'number', default: '5' },
+				{ id: 'stack', label: 'Stack', type: 'number', default: '8192', description: 'จำนวนพื้นที่หน่วยความจำที่อนุญาตให้ใช้ทำงาน' },
+				{ id: 'priority', label: 'Priority', type: 'number', default: '5', description: 'ลำดับความสำคัญของงาน (ตัวเลขยิ่งมาก ยิ่งสำคัญ)' },
 			],
 			toCode({ block, safeId, captureCode, registerFunction, pad, params }) {
 				const id = safeId(block.id);

@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npm run:*)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(node -e \"const m = require\\('lucide-svelte'\\); const keys = Object.keys\\(m\\).filter\\(k => k.toLowerCase\\(\\).includes\\('help'\\) || k.toLowerCase\\(\\).includes\\('question'\\) || k.toLowerCase\\(\\).includes\\('info'\\)\\); console.log\\(keys.slice\\(0,20\\)\\)\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\sonth\\GitHub\\ui-click\\src\\lib"

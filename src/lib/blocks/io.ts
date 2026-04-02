@@ -9,19 +9,22 @@ export const ioCategory: BlockCategory = {
 			color: '#3b82f6',
 			icon: '🏷️',
 			category: 'io',
+			description: 'กำหนดโหมดการทำงานของขา GPIO เช่น INPUT, OUTPUT หรือ INPUT_PULLUP (pinMode)',
 			inputs: [
-				{ id: 'in', type: 'input', label: '➜', dataType: 'any' },
+				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
 			],
-			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void' }],
+			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปยังบล็อกถัดไป' }],
 			params: [
 				{
 					id: 'pin',
+					description: 'หมายเลขขา GPIO ที่ต้องการกำหนดโหมดการทำงาน',
 					type: 'number',
 					label: 'Pin',
 					default: '5'
 				},
 				{
 					id: 'mode',
+					description: 'โหมดการทำงานของ GPIO (INPUT / OUTPUT / INPUT_PULLUP)',
 					type: 'option',
 					label: 'Mode',
 					options: [
@@ -48,13 +51,15 @@ export const ioCategory: BlockCategory = {
 			color: '#3b82f6',
 			icon: '🔎',
 			category: 'io',
+			description: 'อ่านค่าดิจิทัล (0 = LOW, 1 = HIGH) จากขา GPIO ที่กำหนด (digitalRead)',
 			inputs: [
-				{ id: 'in', type: 'input', label: '➜', dataType: 'any' },
+				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
 			],
-			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'int' }],
+			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'int', description: 'ค่าที่อ่านได้จากขา GPIO (int: 0 หรือ 1)' }],
 			params: [
 				{
 					id: 'pin',
+					description: 'หมายเลขขา GPIO ที่ต้องการอ่านค่า',
 					type: 'number',
 					label: 'Pin',
 					default: '2'
@@ -77,19 +82,22 @@ export const ioCategory: BlockCategory = {
 			color: '#3b82f6',
 			icon: '✍️',
 			category: 'io',
+			description: 'เขียนค่าดิจิทัล HIGH หรือ LOW ออกขา GPIO ที่กำหนด (digitalWrite)',
 			inputs: [
-				{ id: 'in', type: 'input', label: '➜', dataType: 'any' },
+				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
 			],
-			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void' }],
+			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปยังบล็อกถัดไป' }],
 			params: [
 				{
 					id: 'pin',
+					description: 'หมายเลขขา GPIO ที่ต้องการเขียนค่า',
 					type: 'number',
 					label: 'Pin',
 					default: '5'
 				},
 				{
 					id: 'value',
+					description: 'ค่าที่ต้องการเขียน (HIGH / LOW)',
 					type: 'option',
 					label: 'Value',
 					options: [
@@ -98,7 +106,7 @@ export const ioCategory: BlockCategory = {
 					]
 				}
 			],
-			toCode({ pad, resolveInput, params }) {
+			toCode({ pad, params }) {
 				const pin = params.pin ?? '5';
 				const val = params.value ?? 'LOW';
 				return {
@@ -115,12 +123,13 @@ export const ioCategory: BlockCategory = {
 			color: '#3b82f6',
 			icon: '✍️',
 			category: 'io',
+			description: 'เขียนค่าดิจิทัลออกขา GPIO โดยรับทั้งหมายเลขขาและค่าจากบล็อกอื่นแบบไดนามิก',
 			inputs: [
-				{ id: 'in', type: 'input', label: '➜', dataType: 'any' },
-				{ id: 'pin', type: 'input', label: 'Pin', dataType: 'int' },
-				{ id: 'value', type: 'input', label: 'Value', dataType: 'int' }
+				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+				{ id: 'pin', type: 'input', label: 'Pin', dataType: 'int', description: 'หมายเลขขา GPIO ที่ต้องการเขียน' },
+				{ id: 'value', type: 'input', label: 'Value', dataType: 'int', description: 'ค่าที่ต้องการเขียน (0 = LOW, 1 = HIGH)' }
 			],
-			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void' }],
+			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปยังบล็อกถัดไป' }],
 			toCode({ pad, resolveInput }) {
 				const pin = resolveInput('pin') ?? '-1';
 				const val = resolveInput('value') ?? '0';
@@ -138,13 +147,15 @@ export const ioCategory: BlockCategory = {
 			color: '#3b82f6',
 			icon: '🕹️',
 			category: 'io',
+			description: 'สลับสถานะ HIGH/LOW ของขา GPIO (toggle) — อ่านค่าปัจจุบันแล้วกลับค่า',
 			inputs: [
-				{ id: 'in', type: 'input', label: '➜', dataType: 'any' },
+				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
 			],
-			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void' }],
+			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปยังบล็อกถัดไป' }],
 			params: [
 				{
 					id: 'pin',
+					description: 'หมายเลขขา GPIO ที่ต้องการสลับสถานะ',
 					type: 'number',
 					label: 'Pin',
 					default: '2'
@@ -166,11 +177,13 @@ export const ioCategory: BlockCategory = {
 			color: '#3b82f6',
 			icon: '🌊',
 			category: 'io',
-			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any' }],
-			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'int' }],
+			description: 'อ่านค่า Analog จากขา ADC (0–4095 สำหรับ ESP32 หรือ 0–1023 สำหรับ Arduino) (analogRead)',
+			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
+			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'int', description: 'ค่าที่อ่านได้จากขา ADC (int)' }],
 			params: [
 				{
 					id: 'pin',
+					description: 'หมายเลขขา GPIO ที่ต้องการอ่านค่าแอนะล็อก',
 					type: 'number',
 					label: 'Pin',
 					default: '5'
@@ -193,25 +206,28 @@ export const ioCategory: BlockCategory = {
 			color: '#3b82f6',
 			icon: '⚡',
 			category: 'io',
+			description: 'ส่งสัญญาณ PWM ออกขา GPIO ค่า 0–255 (analogWrite)',
 			inputs: [
-				{ id: 'in', type: 'input', label: '➜', dataType: 'any' },
+				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
 			],
-			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void' }],
+			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปยังบล็อกถัดไป' }],
 			params: [
 				{
 					id: 'pin',
+					description: 'หมายเลขขา GPIO ที่ต้องการส่งสัญญาณ PWM',
 					type: 'number',
 					label: 'Pin',
 					default: '5'
 				},
 				{
 					id: 'value',
+					description: 'ค่า PWM ที่ต้องการส่ง เมื่อ 0 คือ 0% , 255 คือ 100%)',
 					type: 'number',
 					label: 'Value (0-255)',
 					validation: (n: number) => n < 0 ? 0 : n > 255 ? 255 : n,
 				}
 			],
-			toCode({ pad, resolveInput, params }) {
+			toCode({ pad, params }) {
 				const pin = params.pin ?? '5';
 				const val = params.value ?? 'LOW';
 				return {
@@ -228,19 +244,22 @@ export const ioCategory: BlockCategory = {
 			color: '#3b82f6',
 			icon: '⏳',
 			category: 'io',
+			description: 'วัดความกว้างของพัลส์ HIGH หรือ LOW บนขา GPIO (pulseIn) คืนค่าเป็น microseconds',
 			inputs: [
-				{ id: 'in', type: 'input', label: '➜', dataType: 'any' },
+				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
 			],
-			outputs: [{ id: 'time', type: 'output', label: 'Time (uS)', dataType: 'long' }],
+			outputs: [{ id: 'time', type: 'output', label: 'Time (uS)', dataType: 'long', description: 'ความกว้างของพัลส์ที่วัดได้ (microseconds)' }],
 			params: [
 				{
 					id: 'pin',
+					description: 'หมายเลขขา GPIO ที่ต้องการวัคความกว้างพัลส์',
 					type: 'number',
 					label: 'Pin',
 					default: '2'
 				},
 				{
 					id: 'value',
+					description: 'ลอจิกที่ต้องการวัด (HIGH / LOW)',
 					type: 'option',
 					label: 'Value',
 					options: [
@@ -250,6 +269,7 @@ export const ioCategory: BlockCategory = {
 				},
 				{
 					id: 'timeout',
+					description: 'ระยะเวลารอสัญญาณนานสุด หน่วย microseconds',
 					type: 'number',
 					label: 'Timeout (uS)',
 					default: '1000000'

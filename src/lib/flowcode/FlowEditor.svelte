@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import {
 		blockCategories,
 	} from '$lib/blocks/index.js';
@@ -16,12 +15,14 @@
 		DataType
 	} from '$lib/blocks/types.js';
 	import { flowToC } from './engine.js';
+	import BlockContextMenu from '$lib/components/BlockContextMenu.svelte';
 
 	interface Props {
 		/** หมวดหมู่บล็อกที่แสดงในแผง Palette (default: ทุก category) */
 		categories?: BlockCategory[];
 		/** เรียกทุกครั้งที่ state เปลี่ยน */
 		onchange?: (event: FlowEditorEvent) => void;
+		onhelp?: (blockInfo: BlockDef) => void;
 	}
 
 	export type FlowEditorEvent =
@@ -35,9 +36,10 @@
 		| 'conn:delete'
 		| 'conn:focus'
 		| 'conn:blur'
-		| 'project:load';
+		| 'project:load'
+		| 'project:clear';
 
-	let { categories = blockCategories, onchange }: Props = $props();
+	let { categories = blockCategories, onchange, onhelp }: Props = $props();
 
 	/** map จาก typeId → BlockDef ที่ใช้งานอยู่ */
 	const defMap = $derived<Record<string, BlockDef>>(
@@ -59,6 +61,7 @@
 	let selectedBlockId = $state<string | null>(null);
 	let draggingConnEnd = $state<{ connId: string; end: 'from' | 'to' } | null>(null);
 	let searchQuery = $state('');
+	let contextMenu = $state<{ x: number; y: number; blockId: string } | null>(null);
 
 	const connectingDataType = $derived<DataType | null>(
 		connectingFrom
@@ -388,6 +391,21 @@
 	}
 
 	// ─── Block / connection helpers ──────────────────────────────────
+	export function duplicateBlock(blockId: string) {
+		const block = canvasBlocks.find((b) => b.id === blockId);
+		if (!block) return;
+		canvasBlocks = [...canvasBlocks, {
+			...block,
+			id: `block-${nextId++}`,
+			x: block.x + 20,
+			y: block.y + 20,
+			inputs: block.inputs.map((p) => ({ ...p })),
+			outputs: block.outputs.map((p) => ({ ...p })),
+			params: { ...block.params },
+		}];
+		onchange?.('block:add');
+	}
+
 	export function deleteBlock(blockId: string) {
 		canvasBlocks = canvasBlocks.filter((b) => b.id !== blockId);
 		connections = connections.filter(
@@ -473,7 +491,7 @@
 
 	export function getZoom() { return zoom; }
 	export function getIsConnecting() { return connectingFrom !== null; }
-	export function getSelectedBlock() { return selectedBlockId !== null; }
+	export function getSelectedBlock() { return canvasBlocks.find((b) => b.id === selectedBlockId) ?? null; }
 	export function getSelectedConn() { return selectedConnId !== null; }
 
 	export function exportJson() {
@@ -499,6 +517,7 @@
 	export function clear() {
 		canvasBlocks = [];
 		connections = [];
+		onchange?.('project:clear');
 	}
 
 	// ─── Code generation ─────────────────────────────────────────────
@@ -643,6 +662,7 @@
 					style="left:{block.x}px; top:{block.y}px; width:{BLOCK_WIDTH}px; height:{bh}px;"
 					onmousedown={(e) => handleBlockMouseDown(e, block)}
 					onclick={(e) => e.stopPropagation()}
+					oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); contextMenu = { x: e.clientX, y: e.clientY, blockId: block.id }; }}
 				>
 					<div
 						class="absolute inset-0 select-none overflow-visible rounded-xl border shadow-xl transition-shadow"
@@ -757,6 +777,20 @@
 			{/each}
 		</div><!-- end transform wrapper -->
 
+		<!-- Block context menu -->
+		{#if contextMenu}
+			{@const menuBlockId = contextMenu.blockId}
+			<BlockContextMenu
+				x={contextMenu.x}
+				y={contextMenu.y}
+				onaddnote={() => {}}
+				onduplicate={() => duplicateBlock(menuBlockId)}
+				onhelp={() => onhelp?.(defMap[canvasBlocks.find((b) => b.id === menuBlockId)?.typeId ?? ''])}
+				ondelete={() => { deleteBlock(menuBlockId); if (selectedBlockId === menuBlockId) selectedBlockId = null; }}
+				onclose={() => { contextMenu = null; }}
+			/>
+		{/if}
+
 		<!-- FAB: Zoom controls -->
 		<div class="absolute bottom-4 right-4 z-20 flex flex-col gap-2">
 			<button
@@ -864,7 +898,7 @@
 								aria-label="บล็อก {block.name}"
 							>
 								<div
-									class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-xs font-bold"
+									class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-bold"
 									style="background:{block.color}25; color:{block.color};"
 								>
 									{block.icon}
