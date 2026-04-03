@@ -95,7 +95,7 @@ export const dataCategory: BlockCategory = {
 					]
 				};
 			}
-		},
+		},*/
 		{
 			id: 'math',
 			name: 'Math',
@@ -107,35 +107,140 @@ export const dataCategory: BlockCategory = {
 				{ id: 'b', type: 'input', label: 'B', dataType: 'float' }
 			],
 			outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: 'float' }],
-			toCode({ block, pad, safeId, resolveInput }) {
+			params: [{ id: 'operator', label: 'Operator', type: 'option', options: [
+				{ label: '+', value: '+' },
+				{ label: '-', value: '-' },
+				{ label: '×', value: '*' },
+				{ label: '÷', value: '/' },
+			]}],
+			toCode({ block, pad, safeId, resolveInput, params }) {
 				const a = resolveInput('a') ?? '0';
 				const b = resolveInput('b') ?? '0';
+				const operator = params?.operator || '+';
 				return {
 					parts: [
-						[`${pad}float ${safeId(block.id)} = ${a} + ${b};`],
+						[`${pad}float ${safeId(block.id)} = ${a} ${operator} ${b};`],
 						{ portId: 'result', depthDelta: 0 }
 					]
 				};
 			}
 		},
 		{
-			id: 'string',
-			name: 'String',
-			color: '#f97316',
-			icon: '"',
+			id: 'trigonometric',
+			name: 'Trigonometric',
+			color: '#14b8a6',
+			icon: '📐',
 			category: 'data',
-			inputs: [{ id: 'in', type: 'input', label: 'In', dataType: 'String' }],
+			inputs: [
+				{ id: 'angle', type: 'input', label: 'Angle', dataType: 'float' },
+			],
+			outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: 'float' }],
+			params: [{ id: 'function', label: 'Function', type: 'option', options: [
+				{ label: 'sin', value: 'sin' },
+				{ label: 'cos', value: 'cos' },
+				{ label: 'tan', value: 'tan' },
+			]}],
+			toCode({ block, pad, safeId, resolveInput, params }) {
+				const angle = resolveInput('angle') ?? '0';
+				const fn = params?.function || '';
+				return {
+					parts: [
+						[`${pad}float ${safeId(block.id)} = ${fn}(${angle});`],
+						{ portId: 'result', depthDelta: 0 }
+					]
+				};
+			}
+		},
+		{
+			id: 'to_string',
+			name: 'To String',
+			color: '#f97316',
+			icon: 'a',
+			category: 'data',
+			description: 'แปลงข้อมูลตัวเลข / Bool เป็นข้อความ (String)',
+			inputs: [{ id: 'in', type: 'input', label: 'In', dataType: 'any' }],
 			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'String' }],
 			toCode({ block, pad, safeId, resolveInput }) {
 				const src = resolveInput('in') ?? '""';
 				return {
 					parts: [
-						[`${pad}String ${safeId(block.id)} = ${src};`],
+						[`${pad}String ${safeId(block.id)} = String(${src});`],
 						{ portId: 'out', depthDelta: 0 }
 					]
 				};
 			}
 		},
+		{
+			id: 'string_to_float',
+			name: 'String to Float',
+			color: '#f97316',
+			icon: 'i',
+			category: 'data',
+			description: 'แปลงข้อมูลข้อความ (String) เป็นตัวเลข',
+			inputs: [{ id: 'in', type: 'input', label: 'In', dataType: 'String' }],
+			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'float' }],
+			toCode({ block, pad, safeId, resolveInput }) {
+				const src = resolveInput('in') ?? '""';
+				return {
+					parts: [
+						[`${pad}float ${safeId(block.id)} = String(${src}).toFloat();`],
+						{ portId: 'out', depthDelta: 0 }
+					]
+				};
+			}
+		},
+		{
+			id: 'string_combine',
+			name: 'String Combine',
+			color: '#f97316',
+			icon: '"+',
+			category: 'data',
+			description: 'รวมข้อความ/ตัวเลขเป็นข้อความเดียว',
+			inputs: [
+				{ id: 'in1', type: 'input', label: 'In 1', dataType: 'any' },
+				{ id: 'in2', type: 'input', label: 'In 2', dataType: 'any' }
+			],
+			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'String' }],
+			params: [{ id: 'count', type: 'number', label: 'จำนวน', default: '2', validation: (n: number) => Math.max(2, Math.min(10, n)), description: 'จำนวนข้อความที่ต้องการรวม (2–10)' }],
+			dynamicPorts({ count }) {
+				const n = Math.max(2, Math.min(10, parseInt(count) || 2));
+				return {
+					inputs: Array.from({ length: n }, (_, i) => ({
+						id: `in${i + 1}`, type: 'input' as const, label: `In ${i + 1}`, dataType: 'any' as const
+					}))
+				};
+			},
+			toCode({ block, pad, safeId, resolveInput, params }) {
+				const n = Math.max(2, Math.min(10, parseInt(params.count) || 2));
+				const src = Array.from({ length: n }, (_, i) => resolveInput(`in${i + 1}`) ?? '""');
+				return {
+					parts: [
+						[`${pad}String ${safeId(block.id)} = ${src.map(a => `String(${a})`).join(' + ')};`],
+						{ portId: 'out', depthDelta: 0 }
+					]
+				};
+			}
+		},
+		{
+			id: 'void_to_int',
+			name: 'Void to Int',
+			color: '#f97316',
+			icon: 'i',
+			category: 'data',
+			inputs: [{ id: 'in', type: 'input', label: 'In', dataType: 'void' }],
+			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'int' }],
+			params: [{ id: 'value', type: 'number', label: 'Value', default: '0' }],
+			toCode({ block, pad, safeId, params }) {
+				const n = params?.n || 0;
+				return {
+					parts: [
+						[`${pad}int ${safeId(block.id)} = ${n};`],
+						{ portId: 'out', depthDelta: 0 }
+					]
+				};
+			}
+		},
+		/*
 		{
 			id: 'array',
 			name: 'Array',

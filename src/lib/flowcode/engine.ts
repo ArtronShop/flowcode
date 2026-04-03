@@ -85,6 +85,18 @@ export function flowToC(
 			return;
 		}
 
+		// Pre-emit data-source blocks: บล็อกที่ต่อเข้ามาทาง data input และต้องการ statement
+		// (มี toCode แต่ไม่มี toExpr และ output port ไม่ใช่ void)
+		for (const conn of connections.filter((c) => c.toBlockId === blockId)) {
+			const src = canvasBlocks.find((b) => b.id === conn.fromBlockId);
+			if (!src || visitedSet.has(src.id)) continue;
+			const srcDef = defMap[src.typeId];
+			if (!srcDef || srcDef.toExpr) continue;
+			const srcPort = src.outputs.find((p) => p.id === conn.fromPortId);
+			if (!srcPort || srcPort.dataType === 'void') continue;
+			traverseTo(src.id, depth, target, visitedSet);
+		}
+
 		let result;
 		try {
 			result = def.toCode({

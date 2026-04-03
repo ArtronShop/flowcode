@@ -40,8 +40,8 @@ type SidePanel = 'files' | 'extensions' | 'help' | null;
 			zoom: editor!.getZoom(),
 		};
 
-		if (event === 'zoom' || event === 'block:focus' || event === 'block:blur'
-			|| event === 'conn:focus' || event === 'conn:blur' || event === 'block:move') return;
+		/*if (event === 'zoom' || event === 'block:focus' || event === 'block:blur'
+			|| event === 'conn:focus' || event === 'conn:blur' || event === 'block:move') return;*/
 
 		// Save to Local Storage
 		const json = editor!.exportJson();
@@ -136,7 +136,13 @@ type SidePanel = 'files' | 'extensions' | 'help' | null;
 	onMount(() => {
 		const saved = localStorage.getItem('flowcode-project');
 		if (saved) editor?.importJson(saved);
+
+		showConsole = localStorage.getItem('show-console') === '1';
 	});
+
+	$effect(() => {
+		localStorage.setItem('show-console', showConsole ? '1' : '0');
+	})
 </script>
 
 <ConfirmDialog
