@@ -40,6 +40,9 @@ type SidePanel = 'files' | 'extensions' | 'help' | null;
 			zoom: editor!.getZoom(),
 		};
 
+		if (event === 'zoom' || event === 'block:focus' || event === 'block:blur'
+			|| event === 'conn:focus' || event === 'conn:blur' || event === 'block:move') return;
+
 		// Save to Local Storage
 		const json = editor!.exportJson();
 		localStorage.setItem('flowcode-project', json);
@@ -477,6 +480,6 @@ type SidePanel = 'files' | 'extensions' | 'help' | null;
 	<footer class="flex items-center gap-4 border-t border-gray-800 bg-gray-900 px-4 py-1 text-[10px] text-gray-600">
 		<span>บล็อก: <span class="text-gray-400">{status?.blockCount ?? 0}</span></span>
 		<span>การเชื่อมต่อ: <span class="text-gray-400">{status?.connCount ?? 0}</span></span>
-		<span class="ml-auto text-gray-500">{Math.round((status?.zoom ?? 1) * 100)}%</span>
+		<button class="ml-auto text-gray-500 hover:text-gray-400" onclick={() => editor?.zoomReset()}>{Math.round((status?.zoom ?? 1) * 100)}%</button>
 	</footer>
 </div>

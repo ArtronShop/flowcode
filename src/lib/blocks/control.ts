@@ -204,9 +204,10 @@ export const controlCategory: BlockCategory = {
 			color: '#e879f9',
 			icon: '⇌',
 			category: 'logic',
-			inputs: [{ id: 'in', type: 'input', label: 'Value', dataType: 'int' }],
-			outputs: [{ id: 'default', type: 'output', label: 'Default', dataType: 'void' }],
-			params: [{ id: 'cases', type: 'number', label: 'จำนวน Case', default: '2', validation: (n: number) => Math.max(1, Math.min(10, n)) }],
+			description: 'แยกทิศทางการทำงานตามค่าตัวเลข (switch/case) รองรับหลาย case และ default',
+			inputs: [{ id: 'in', type: 'input', label: 'Value', dataType: 'int', description: 'ค่าตัวเลขที่ใช้ตรวจสอบในแต่ละ case' }],
+			outputs: [{ id: 'default', type: 'output', label: 'Default', dataType: 'void', description: 'รันเมื่อค่าไม่ตรงกับ case ใดเลย' }],
+			params: [{ id: 'cases', type: 'number', label: 'จำนวน Case', default: '2', validation: (n: number) => Math.max(1, Math.min(10, n)), description: 'จำนวน case ที่ต้องการตรวจสอบ' }],
 			dynamicPorts({ cases }) {
 				const n = Math.max(1, Math.min(10, parseInt(cases) || 2));
 				return {

@@ -35,7 +35,8 @@
 		| 'conn:focus'
 		| 'conn:blur'
 		| 'project:load'
-		| 'project:clear';
+		| 'project:clear'
+		| 'zoom';
 
 	let { categories = [], onchange, onhelp }: Props = $props();
 
@@ -296,6 +297,7 @@
 		panX = mx - (mx - panX) * (newZoom / zoom);
 		panY = my - (my - panY) * (newZoom / zoom);
 		zoom = newZoom;
+		onchange?.('zoom');
 	}
 
 	function zoomAround(factor: number) {
@@ -306,6 +308,7 @@
 		panX = cx - (cx - panX) * (newZoom / zoom);
 		panY = cy - (cy - panY) * (newZoom / zoom);
 		zoom = newZoom;
+		onchange?.('zoom');
 	}
 
 	function focusCanvas() {
@@ -322,6 +325,7 @@
 		panX = (rect.width - bw * newZoom) / 2 - minX * newZoom;
 		panY = (rect.height - bh * newZoom) / 2 - minY * newZoom;
 		zoom = newZoom;
+		onchange?.('zoom');
 	}
 
 	// ─── Keyboard ────────────────────────────────────────────────────
@@ -508,10 +512,11 @@
 
 	function editNote(blockId: string) {
 		let b = canvasBlocks.find((b) => b.id === blockId);
-		if (b) {
-			b.note = prompt('ข้อความที่ต้องการโน็ต', '') || '';
-			onchange?.('block:note-edit');
-		}
+		if (!b) return; // not found block id
+		const newNote = prompt('ข้อความที่ต้องการโน็ต', b.note);
+		if (newNote == null) return; // Cancel
+		b.note = newNote;
+		onchange?.('block:note-edit');
 	}
 
 	// ─── Public API (via bind:this) ──────────────────────────────────
@@ -552,6 +557,13 @@
 		canvasBlocks = [];
 		connections = [];
 		onchange?.('project:clear');
+	}
+
+	export function zoomReset() {
+		zoom = 1;
+		panX = 0;
+		panY = 0;
+		onchange?.('zoom');
 	}
 
 	// ─── Code generation ─────────────────────────────────────────────
