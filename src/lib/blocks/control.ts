@@ -11,9 +11,9 @@ export const controlCategory: BlockCategory = {
 			category: 'action',
 			description: 'หยุดรอตามเวลาที่กำหนด (milliseconds) ก่อนดำเนินการต่อ (delay)',
 			inputs: [
-				{ id: 'in', type: 'input', label: 'In', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
 			],
-			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปหลังหมดเวลา' }],
+			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปหลังหมดเวลา' }],
 			params: [{ id: 'time', type: 'number', label: 'Time (mS)', default: '1000' }],
 			toCode({ pad, params }) {
 				const time = params.time ?? '1000';
@@ -21,6 +21,32 @@ export const controlCategory: BlockCategory = {
 					parts: [
 						[`${pad}delay(${time});`],
 						{ portId: 'out', depthDelta: 0 }
+					]
+				};
+			}
+		},
+		{
+			id: 'Filter',
+			name: 'Filter',
+			color: '#f59e0b',
+			icon: '⛛',
+			category: 'logic',
+			description: 'กรองเฉพาะข้อมูลตามเงื่อนไขเท่านั้นที่จะทำให้บล็อกถัดไปทำงาน',
+			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'ค่าที่นำมาเปรียบเทียบกับเงื่อนไข' }],
+			outputs: [
+				{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'บล็อกที่ต้องการให้ทำงานเมื่อเงื่อนไขผ่าน' },
+			],
+			params: [
+				{ id: 'condition', type: 'text', default: '== 1' }
+			],
+			toCode({ pad, resolveInput, params }) {
+				const condition = params.condition ?? '== true';
+				const inp = resolveInput('in') ?? 'true';
+				return {
+					parts: [
+						[`${pad}if (${[inp, condition].join(' ')}) {`],
+						{ portId: 'out', depthDelta: 1 },
+						[`${pad}}`],
 					]
 				};
 			}
@@ -167,6 +193,47 @@ export const controlCategory: BlockCategory = {
 						[`${pad}    default:`],
 						{ portId: 'default', depthDelta: 2 },
 						[`${pad}        break;`],
+						[`${pad}}`]
+					]
+				};
+			}
+		},
+		{
+			id: 'switch_n',
+			name: 'Switch 2',
+			color: '#e879f9',
+			icon: '⇌',
+			category: 'logic',
+			inputs: [{ id: 'in', type: 'input', label: 'Value', dataType: 'int' }],
+			outputs: [{ id: 'default', type: 'output', label: 'Default', dataType: 'void' }],
+			params: [{ id: 'cases', type: 'number', label: 'จำนวน Case', default: '2', validation: (n: number) => Math.max(1, Math.min(10, n)) }],
+			dynamicPorts({ cases }) {
+				const n = Math.max(1, Math.min(10, parseInt(cases) || 2));
+				return {
+					outputs: [
+						...Array.from({ length: n }, (_, i) => ({
+							id: `case${i+1}`, type: 'output' as const, label: `Case ${i+1}`, dataType: 'void' as const
+						})),
+						{ id: 'default', type: 'output' as const, label: 'Default', dataType: 'void' as const }
+					]
+				};
+			},
+			toCode({ pad, resolveInput, params }) {
+				let val = resolveInput('in') ?? '-1'
+				const n = parseInt(params.cases);
+				const caseStatement: any[] = [];
+				for (let i=1;i<=n;i++) {
+					caseStatement.push([`${pad}  case ${i}:`]);
+					caseStatement.push({ portId: `case${i}`, depthDelta: 2 });
+					caseStatement.push([`${pad}    break;`]);
+				}
+				return {
+					parts: [
+						[`${pad}switch (${val}) {`],
+						...caseStatement,
+						[`${pad}  default:`],
+						{ portId: 'default', depthDelta: 2 },
+						[`${pad}    break;`],
 						[`${pad}}`]
 					]
 				};

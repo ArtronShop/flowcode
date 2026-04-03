@@ -189,6 +189,11 @@ export type BlockDef = {
 	 */
 	toExpr?: (params: Record<string, string>) => string;
 	/**
+	 * ถ้ากำหนด: คืน inputs/outputs ใหม่ตาม params ปัจจุบัน
+	 * เรียกทุกครั้งที่ param เปลี่ยน — connection ที่ชี้ไป port ที่หายไปจะถูกลบอัตโนมัติ
+	 */
+	dynamicPorts?: (params: Record<string, string>) => { inputs?: Port[]; outputs?: Port[]; };
+	/**
 	 * สร้างโค้ดสำหรับบล็อกนี้
 	 * @throws เมื่อสร้างโค้ดไม่ได้ (เช่น ข้อมูลไม่ครบ)
 	 */

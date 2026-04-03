@@ -153,6 +153,8 @@
 		}
 		const cc = toCanvasCoords(clientX, clientY);
 		const src = draggingFromPalette;
+		const defaultParams = Object.fromEntries((src.params ?? []).map((p) => [p.id, paramDefault(p)]));
+		const dynPorts = src.dynamicPorts?.(defaultParams);
 		canvasBlocks = [
 			...canvasBlocks,
 			{
@@ -164,9 +166,9 @@
 				icon: src.icon,
 				x: snap(Math.max(0, cc.x - BLOCK_WIDTH / 2)),
 				y: snap(Math.max(0, cc.y - BLOCK_HEADER / 2)),
-				inputs: src.inputs.map((p) => ({ ...p })),
-				outputs: src.outputs.map((p) => ({ ...p })),
-				params: Object.fromEntries((src.params ?? []).map((p) => [p.id, paramDefault(p)])),
+				inputs:  (dynPorts?.inputs  ?? src.inputs).map((p) => ({ ...p })),
+				outputs: (dynPorts?.outputs ?? src.outputs).map((p) => ({ ...p })),
+				params: defaultParams,
 				note: ''
 			}
 		];
@@ -429,9 +431,34 @@
 		} else if (pDef?.type === 'text' && pDef.validation) {
 			value = pDef.validation(raw);
 		}
-		canvasBlocks = canvasBlocks.map((b) =>
-			b.id === blockId ? { ...b, params: { ...(b.params ?? {}), [paramId]: value } } : b
-		);
+
+		canvasBlocks = canvasBlocks.map((b) => {
+			if (b.id !== blockId) return b;
+			const newParams = { ...(b.params ?? {}), [paramId]: value };
+			if (!def?.dynamicPorts) return { ...b, params: newParams };
+			const dyn = def.dynamicPorts(newParams);
+			return {
+				...b,
+				params: newParams,
+				inputs:  dyn.inputs  ? dyn.inputs.map((p) => ({ ...p }))  : b.inputs,
+				outputs: dyn.outputs ? dyn.outputs.map((p) => ({ ...p })) : b.outputs,
+			};
+		});
+
+		// Remove connections whose port no longer exists on this block
+		if (def?.dynamicPorts) {
+			const block = canvasBlocks.find((b) => b.id === blockId);
+			if (block) {
+				const inIds  = new Set(block.inputs.map((p) => p.id));
+				const outIds = new Set(block.outputs.map((p) => p.id));
+				connections = connections.filter((c) => {
+					if (c.toBlockId   === blockId && !inIds.has(c.toPortId))   return false;
+					if (c.fromBlockId === blockId && !outIds.has(c.fromPortId)) return false;
+					return true;
+				});
+			}
+		}
+
 		onchange?.('block:param');
 	}
 
