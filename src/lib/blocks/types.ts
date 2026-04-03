@@ -201,6 +201,7 @@ export type BlockDef = {
 };
 
 export type BlockCategory = {
+	id?: string; // Request for extension
 	name: string;
 	blocks: BlockDef[];
 };

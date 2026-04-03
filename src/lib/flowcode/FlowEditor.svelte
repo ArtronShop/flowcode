@@ -219,8 +219,8 @@
 				b.id === draggingBlock!.id
 					? {
 							...b,
-							x: snap(Math.max(0, cc.x - draggingBlock!.offsetX)),
-							y: snap(Math.max(0, cc.y - draggingBlock!.offsetY))
+							x: snap(cc.x - draggingBlock!.offsetX),
+							y: snap(cc.y - draggingBlock!.offsetY)
 						}
 					: b
 			);
@@ -623,8 +623,8 @@
 					{@const isDraggingThis = draggingConnEnd?.connId === conn.id}
 					<g
 						style="pointer-events:stroke; cursor:pointer;"
-						onclick={(e) => { e.stopPropagation(); selectedConnId = conn.id; onchange?.('conn:focus'); }}
-						onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); selectedConnId = conn.id; onchange?.('conn:focus'); } }}
+						onclick={(e) => { e.stopPropagation(); if (selectedBlockId) { selectedBlockId = null; onchange?.('block:blur'); } selectedConnId = conn.id; onchange?.('conn:focus'); }}
+						onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); if (selectedBlockId) { selectedBlockId = null; onchange?.('block:blur'); } selectedConnId = conn.id; onchange?.('conn:focus'); } }}
 						role="button"
 						tabindex="0"
 						aria-label="เลือกการเชื่อมต่อ"

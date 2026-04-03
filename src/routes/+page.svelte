@@ -2,16 +2,99 @@
 	import { onMount } from 'svelte';
 	import FlowEditor, { type FlowEditorEvent } from '$lib/flowcode/FlowEditor.svelte';
 	import ConfirmDialog, { type ConfirmOptions } from '$lib/components/ConfirmDialog.svelte';
-	import { blockCategories } from '$lib/blocks/index.js';
-	import type { BlockDef } from '$lib/blocks/types.js';
+	import { blockCategories as defaultBlockCategories } from '$lib/blocks/index.js';
+	import type { BlockCategory, BlockDef } from '$lib/blocks/types.js';
 	import {
 		FilePlus, FolderOpen, Save, CirclePlay, SquareCode,
 		User, Folder, LogOut, Copy, Terminal,
-		Files, Puzzle, CircleQuestionMark, 
-		ArrowLeft, X
+		Files, Puzzle, CircleQuestionMark,
+		ArrowLeft, X, Download, Trash2, CircleCheck
 	} from 'lucide-svelte';
 
-type SidePanel = 'files' | 'extensions' | 'help' | null;
+	type BoardItem = {
+		id: string;
+		fqbn: string;
+		platform: {
+			id: string;
+			version: string;
+			package: string; // Package Index URL (.json)
+		}
+	}
+
+	import sht4xExtension from '$lib/blocks/extension/SHT4x.flowext.js';
+	import sht3xExtension from '$lib/blocks/extension/SHT3x.flowext.js';
+
+	const blockCategories: BlockCategory[] = [ 
+		...defaultBlockCategories,
+
+		// Extension
+		sht4xExtension,
+		sht3xExtension
+	];
+	
+	// TODO: add extension install work
+
+	type ExtensionItem = {
+		id: string;
+		name: string;
+		author: string;
+		description: string;
+		version: string;
+		src: string;
+		installed: boolean;
+	};
+
+	const mockExtensions: ExtensionItem[] = [
+		{
+			id: 'ext-dht',
+			name: 'DHT Sensor',
+			author: 'FlowCode Team',
+			description: 'บล็อกอ่านค่าอุณหภูมิและความชื้นจากเซ็นเซอร์ DHT11 / DHT22',
+			version: '1.0.0',
+			src: '',
+			installed: true,
+		},
+		{
+			id: 'ext-i2c-lcd',
+			name: 'I2C LCD Display',
+			author: 'FlowCode Team',
+			description: 'บล็อกควบคุม LCD 16x2 ผ่าน I2C (LiquidCrystal_I2C)',
+			version: '1.1.2',
+			src: '',
+			installed: false,
+		},
+		{
+			id: 'ext-wifi',
+			name: 'WiFi & HTTP',
+			author: 'community',
+			description: 'บล็อกเชื่อมต่อ WiFi และส่ง HTTP GET/POST สำหรับ ESP32',
+			version: '0.9.1',
+			src: '',
+			installed: false,
+		},
+		{
+			id: 'ext-servo',
+			name: 'Servo Motor',
+			author: 'community',
+			description: 'บล็อกควบคุม Servo Motor กำหนดองศาและความเร็ว',
+			version: '1.0.3',
+			src: '',
+			installed: false,
+		},
+		{
+			id: 'ext-neopixel',
+			name: 'NeoPixel LED',
+			author: 'FlowCode Team',
+			description: 'บล็อกควบคุม WS2812B / NeoPixel Strip กำหนดสีแบบ RGB',
+			version: '1.2.0',
+			src: '',
+			installed: false,
+		},
+	];
+
+	let extensions = $state(mockExtensions.map((e) => ({ ...e })));
+
+	type SidePanel = 'files' | 'extensions' | 'help' | null;
 	let activePanel = $state<SidePanel>(null);
 
 	function togglePanel(panel: SidePanel) {
@@ -331,19 +414,79 @@ type SidePanel = 'files' | 'extensions' | 'help' | null;
 							</button>
 						</div>
 					{:else if activePanel === 'extensions'}
-						<p class="mb-3 text-[11px] text-gray-500">ติดตั้งบล็อกเสริมจากไฟล์ <code class="rounded bg-gray-800 px-1">.flowext.js</code></p>
-						<button
-							onclick={() => {
-								const input = document.createElement('input');
-								input.type = 'file';
-								input.accept = '.js,.flowext.js';
-								input.click();
-							}}
-							class="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-600 px-3 py-4 text-xs text-gray-400 transition-colors hover:border-blue-500 hover:text-blue-400"
-						>
-							<Puzzle size={16} />
-							เลือกไฟล์ Extension
-						</button>
+						<div class="space-y-2">
+							<p class="mb-3 text-[11px] text-gray-500">ติดตั้งแล้ว</p>
+							{#each extensions.filter(a => a.installed) as ext}
+								<div class="rounded-lg border border-gray-700/60 bg-gray-800/40 px-3 py-2.5 text-xs">
+									<div class="flex items-start gap-2">
+										<div class="min-w-0 flex-1">
+											<div class="flex items-center gap-1.5">
+												<span class="font-semibold text-gray-200">{ext.name}</span>
+												<span class="rounded bg-gray-700 px-1 py-px font-mono text-[9px] text-gray-500">v{ext.version}</span>
+												{#if ext.installed}
+													<CircleCheck size={11} class="ml-auto shrink-0 text-green-500" />
+												{/if}
+											</div>
+											<p class="mt-0.5 text-[10px] text-gray-500">โดย {ext.author}</p>
+											<p class="mt-1 leading-snug text-gray-400">{ext.description}</p>
+										</div>
+									</div>
+									<div class="mt-2.5 flex justify-end">
+										{#if ext.installed}
+											<button
+												onclick={() => ext.installed = false}
+												class="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-red-400 transition-colors hover:bg-red-900/30 hover:text-red-300"
+											>
+												<Trash2 size={11} />ถอนติดตั้ง
+											</button>
+										{:else}
+											<button
+												onclick={() => ext.installed = true}
+												class="flex items-center gap-1 rounded bg-blue-600/20 px-2 py-1 text-[10px] text-blue-400 transition-colors hover:bg-blue-600/40 hover:text-blue-300"
+											>
+												<Download size={11} />ติดตั้ง
+											</button>
+										{/if}
+									</div>
+								</div>
+							{/each}
+							<hr class="border-gray-700/60" />
+							<p class="mb-3 text-[11px] text-gray-500">ยังไม่ติดตั้ง</p>
+							{#each extensions as ext}
+								<div class="rounded-lg border border-gray-700/60 bg-gray-800/40 px-3 py-2.5 text-xs">
+									<div class="flex items-start gap-2">
+										<div class="min-w-0 flex-1">
+											<div class="flex items-center gap-1.5">
+												<span class="font-semibold text-gray-200">{ext.name}</span>
+												<span class="rounded bg-gray-700 px-1 py-px font-mono text-[9px] text-gray-500">v{ext.version}</span>
+												{#if ext.installed}
+													<CircleCheck size={11} class="ml-auto shrink-0 text-green-500" />
+												{/if}
+											</div>
+											<p class="mt-0.5 text-[10px] text-gray-500">โดย {ext.author}</p>
+											<p class="mt-1 leading-snug text-gray-400">{ext.description}</p>
+										</div>
+									</div>
+									<div class="mt-2.5 flex justify-end">
+										{#if ext.installed}
+											<button
+												onclick={() => ext.installed = false}
+												class="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-red-400 transition-colors hover:bg-red-900/30 hover:text-red-300"
+											>
+												<Trash2 size={11} />ถอนติดตั้ง
+											</button>
+										{:else}
+											<button
+												onclick={() => ext.installed = true}
+												class="flex items-center gap-1 rounded bg-blue-600/20 px-2 py-1 text-[10px] text-blue-400 transition-colors hover:bg-blue-600/40 hover:text-blue-300"
+											>
+												<Download size={11} />ติดตั้ง
+											</button>
+										{/if}
+									</div>
+								</div>
+							{/each}
+						</div>
 					{:else if activePanel === 'help'}
 						{#if helpBlockDef}
 							<!-- ── Block detail view ───────────────────── -->
