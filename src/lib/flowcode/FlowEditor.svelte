@@ -1,8 +1,5 @@
 <script lang="ts">
 	import {
-		blockCategories,
-	} from '$lib/blocks/index.js';
-	import {
 		isCompatible,
 		PORT_TYPE_COLORS,
 		paramDefault
@@ -32,6 +29,7 @@
 		| 'block:param'
 		| 'block:focus'
 		| 'block:blur'
+		| 'block:note-edit'
 		| 'conn:add'
 		| 'conn:delete'
 		| 'conn:focus'
@@ -39,7 +37,7 @@
 		| 'project:load'
 		| 'project:clear';
 
-	let { categories = blockCategories, onchange, onhelp }: Props = $props();
+	let { categories = [], onchange, onhelp }: Props = $props();
 
 	/** map จาก typeId → BlockDef ที่ใช้งานอยู่ */
 	const defMap = $derived<Record<string, BlockDef>>(
@@ -168,7 +166,8 @@
 				y: snap(Math.max(0, cc.y - BLOCK_HEADER / 2)),
 				inputs: src.inputs.map((p) => ({ ...p })),
 				outputs: src.outputs.map((p) => ({ ...p })),
-				params: Object.fromEntries((src.params ?? []).map((p) => [p.id, paramDefault(p)]))
+				params: Object.fromEntries((src.params ?? []).map((p) => [p.id, paramDefault(p)])),
+				note: ''
 			}
 		];
 		draggingFromPalette = null;
@@ -480,6 +479,14 @@
 		return bezier(f.x, f.y, mousePos.x, mousePos.y);
 	}
 
+	function editNote(blockId: string) {
+		let b = canvasBlocks.find((b) => b.id === blockId);
+		if (b) {
+			b.note = prompt('ข้อความที่ต้องการโน็ต', '') || '';
+			onchange?.('block:note-edit');
+		}
+	}
+
 	// ─── Public API (via bind:this) ──────────────────────────────────
 	export function blockList() {
 		return canvasBlocks;
@@ -773,6 +780,16 @@
 							></div>
 						</div>
 					{/each}
+					<!-- Note label below block -->
+					{#if block.note}
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<div
+							class="absolute cursor-pointer select-none px-1 text-left text-[11px] leading-snug text-gray-400 transition-colors hover:text-gray-200"
+							style="top:{bh + 6}px; left:0; right:0;"
+							onclick={(e) => { e.stopPropagation(); editNote(block.id); }}
+						>{block.note}</div>
+					{/if}
 				</div>
 			{/each}
 		</div><!-- end transform wrapper -->
@@ -783,9 +800,9 @@
 			<BlockContextMenu
 				x={contextMenu.x}
 				y={contextMenu.y}
-				onaddnote={() => {}}
+				onaddnote={() => editNote(menuBlockId)}
 				onduplicate={() => duplicateBlock(menuBlockId)}
-				onhelp={() => onhelp?.(defMap[canvasBlocks.find((b) => b.id === menuBlockId)?.typeId ?? ''])}
+				onhelp={() => { const def = defMap[canvasBlocks.find((b) => b.id === menuBlockId)?.typeId ?? '']; if (def) onhelp?.(def); contextMenu = null; }}
 				ondelete={() => { deleteBlock(menuBlockId); if (selectedBlockId === menuBlockId) selectedBlockId = null; }}
 				onclose={() => { contextMenu = null; }}
 			/>

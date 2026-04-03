@@ -3,18 +3,15 @@
 	import FlowEditor, { type FlowEditorEvent } from '$lib/flowcode/FlowEditor.svelte';
 	import ConfirmDialog, { type ConfirmOptions } from '$lib/components/ConfirmDialog.svelte';
 	import { blockCategories } from '$lib/blocks/index.js';
-	import type { BlockDef, CanvasBlock } from '$lib/blocks/types.js';
+	import type { BlockDef } from '$lib/blocks/types.js';
 	import {
 		FilePlus, FolderOpen, Save, CirclePlay, SquareCode,
 		User, Folder, LogOut, Copy, Terminal,
-		Files, Puzzle, CircleQuestionMark
+		Files, Puzzle, CircleQuestionMark, 
+		ArrowLeft, X
 	} from 'lucide-svelte';
 
-	const blockDefMap: Record<string, BlockDef> = Object.fromEntries(
-		blockCategories.flatMap((c) => c.blocks).map((b) => [b.id, b])
-	);
-
-	type SidePanel = 'files' | 'extensions' | 'help' | null;
+type SidePanel = 'files' | 'extensions' | 'help' | null;
 	let activePanel = $state<SidePanel>(null);
 
 	function togglePanel(panel: SidePanel) {
@@ -29,7 +26,12 @@
 		blockCount: number; connCount: number; zoom: number;
 	}>();
 
-	let focusedBlock = $state<BlockDef | null>(null);
+	let helpBlockDef = $state<BlockDef | null>(null);
+
+	function openBlockHelp(def: BlockDef) {
+		helpBlockDef = def;
+		activePanel = 'help';
+	}
 
 	function handleEditorChange(event: FlowEditorEvent) {
 		status = {
@@ -271,7 +273,7 @@
 			</button>
 			<div class="flex-1"></div>
 			<button
-				onclick={() => { togglePanel('help'); focusedBlock = null; }}
+				onclick={() => { togglePanel('help'); helpBlockDef = null; }}
 				class="flex h-9 w-9 items-center justify-center rounded-lg transition-colors {activePanel === 'help' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-700 hover:text-white'}"
 				title="วิธีใช้"
 			>
@@ -284,16 +286,21 @@
 			<div class="flex w-64 flex-col border-r border-gray-700/60 bg-gray-900">
 				<!-- Panel header -->
 				<div class="flex items-center justify-between border-b border-gray-700/60 px-4 py-3">
-					<span class="text-xs font-semibold uppercase tracking-widest text-gray-400">
-						{#if activePanel === 'files'}จัดการไฟล์
-						{:else if activePanel === 'extensions'}บล็อกเสริม
-						{:else}วิธีใช้
+					<div class="flex gap-2">
+						{#if activePanel === 'help' && helpBlockDef}
+							<button onclick={() => helpBlockDef = null} aria-label="กลับ" class="text-gray-600 hover:text-gray-300 transition-colors">
+								<ArrowLeft size={16} />
+							</button>
 						{/if}
-					</span>
+						<span class="text-xs font-semibold uppercase tracking-widest text-gray-400">
+							{#if activePanel === 'files'}จัดการไฟล์
+							{:else if activePanel === 'extensions'}บล็อกเสริม
+							{:else if activePanel === 'help'}วิธีใช้
+							{/if}
+						</span>
+					</div>
 					<button onclick={() => activePanel = null} aria-label="ปิด" class="text-gray-600 hover:text-gray-300 transition-colors">
-						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-						</svg>
+						<X size={16} />
 					</button>
 				</div>
 
@@ -329,56 +336,58 @@
 							เลือกไฟล์ Extension
 						</button>
 					{:else if activePanel === 'help'}
-						{#if focusedBlock}
-							<!-- Block detail view -->
+						{#if helpBlockDef}
+							<!-- ── Block detail view ───────────────────── -->
 							<div class="space-y-3 text-xs text-gray-400">
-								<div class="flex items-center gap-2">
-									<span class="text-lg leading-none">{focusedBlock.icon}</span>
-									<span class="font-semibold text-white">{focusedBlock.name}</span>
-									<span class="ml-auto rounded bg-gray-700 px-1.5 py-0.5 font-mono text-[9px] text-gray-400">{focusedBlock.category}</span>
+								<div class="flex items-center gap-2 rounded-lg border border-gray-700/60 bg-gray-800/50 px-3 py-2">
+									<span class="text-xl leading-none">{helpBlockDef.icon}</span>
+									<div class="min-w-0 flex-1">
+										<p class="font-semibold text-white">{helpBlockDef.name}</p>
+										<p class="font-mono text-[9px] text-gray-500">{helpBlockDef.category}</p>
+									</div>
 								</div>
-								{#if focusedBlock.description}
-									<p class="leading-relaxed text-gray-300">{focusedBlock.description}</p>
+								{#if helpBlockDef.description}
+									<p class="leading-relaxed text-gray-300">{helpBlockDef.description}</p>
 								{/if}
-								{#if focusedBlock.inputs.length > 0}
+								{#if helpBlockDef.inputs.length > 0}
 									<div>
 										<p class="mb-1.5 font-semibold text-gray-400">Inputs</p>
-										<ul class="space-y-1.5">
-											{#each focusedBlock.inputs as port}
-												<li class="flex flex-col gap-0.5">
-													<span class="font-medium text-gray-300">{port.label} <span class="font-mono text-[9px] text-gray-500">({port.dataType})</span></span>
+										<ul class="space-y-2">
+											{#each helpBlockDef.inputs as port}
+												<li class="rounded bg-gray-800/60 px-2 py-1.5">
+													<p class="font-medium text-gray-300">{port.label} <span class="font-mono text-[9px] text-gray-500">({port.dataType})</span></p>
 													{#if port.description}
-														<span class="text-gray-500">{port.description}</span>
+														<p class="mt-0.5 text-[11px] text-gray-500">{port.description}</p>
 													{/if}
 												</li>
 											{/each}
 										</ul>
 									</div>
 								{/if}
-								{#if focusedBlock.outputs.length > 0}
+								{#if helpBlockDef.outputs.length > 0}
 									<div>
 										<p class="mb-1.5 font-semibold text-gray-400">Outputs</p>
-										<ul class="space-y-1.5">
-											{#each focusedBlock.outputs as port}
-												<li class="flex flex-col gap-0.5">
-													<span class="font-medium text-gray-300">{port.label} <span class="font-mono text-[9px] text-gray-500">({port.dataType})</span></span>
+										<ul class="space-y-2">
+											{#each helpBlockDef.outputs as port}
+												<li class="rounded bg-gray-800/60 px-2 py-1.5">
+													<p class="font-medium text-gray-300">{port.label} <span class="font-mono text-[9px] text-gray-500">({port.dataType})</span></p>
 													{#if port.description}
-														<span class="text-gray-500">{port.description}</span>
+														<p class="mt-0.5 text-[11px] text-gray-500">{port.description}</p>
 													{/if}
 												</li>
 											{/each}
 										</ul>
 									</div>
 								{/if}
-								{#if focusedBlock.params && focusedBlock.params.length > 0}
+								{#if helpBlockDef.params && helpBlockDef.params.length > 0}
 									<div>
-										<p class="mb-1.5 font-semibold text-gray-400">Parameter</p>
-										<ul class="space-y-1.5">
-											{#each focusedBlock.params as params}
-												<li class="flex flex-col gap-0.5">
-													<span class="font-medium text-gray-300">{params.label} <span class="font-mono text-[9px] text-gray-500">({params.type})</span></span>
-													{#if params.description}
-														<span class="text-gray-500">{params.description}</span>
+										<p class="mb-1.5 font-semibold text-gray-400">Parameters</p>
+										<ul class="space-y-2">
+											{#each helpBlockDef.params as param}
+												<li class="rounded bg-gray-800/60 px-2 py-1.5">
+													<p class="font-medium text-gray-300">{param.label ?? param.id} <span class="font-mono text-[9px] text-gray-500">({param.type})</span></p>
+													{#if param.description}
+														<p class="mt-0.5 text-[11px] text-gray-500">{param.description}</p>
 													{/if}
 												</li>
 											{/each}
@@ -387,25 +396,44 @@
 								{/if}
 							</div>
 						{:else}
-							<!-- General help -->
+							<!-- ── Home view: guide + block list ──────── -->
 							<div class="space-y-4 text-xs text-gray-400">
-								<p class="text-[11px] text-gray-500">คลิกที่บล็อกบน Canvas เพื่อดูรายละเอียด</p>
 								<div>
 									<p class="mb-1.5 font-semibold text-gray-300">การใช้งานพื้นฐาน</p>
-									<ul class="space-y-1.5 leading-relaxed">
+									<ul class="space-y-1 leading-relaxed">
 										<li>• ลากบล็อกจากแผง <span class="text-white">Blocks</span> มาวางบน Canvas</li>
-										<li>• คลิกที่พอร์ต Output แล้วลากไปยังพอร์ต Input เพื่อเชื่อมต่อ</li>
-										<li>• คลิกที่บล็อกเพื่อเลือก กด <kbd class="rounded bg-gray-700 px-1 font-mono">Del</kbd> เพื่อลบ</li>
-										<li>• คลิกขวาที่บล็อกเพื่อดูเมนูเพิ่มเติม</li>
+										<li>• คลิกพอร์ต Output ลากไปพอร์ต Input เพื่อเชื่อมต่อ</li>
+										<li>• คลิกบล็อกเพื่อเลือก กด <kbd class="rounded bg-gray-700 px-1 font-mono">Del</kbd> เพื่อลบ</li>
+										<li>• คลิกขวาที่บล็อก → วิธีใช้ เพื่อดูรายละเอียด</li>
+										<li>• เลื่อนล้อเมาส์เพื่อซูม ลากพื้นที่ว่างเพื่อเลื่อน Canvas</li>
 									</ul>
 								</div>
+
+								<hr class="border-gray-700/60" />
+
 								<div>
-									<p class="mb-1.5 font-semibold text-gray-300">Viewport</p>
-									<ul class="space-y-1.5 leading-relaxed">
-										<li>• เลื่อนล้อเมาส์เพื่อซูม</li>
-										<li>• ลากพื้นที่ว่างเพื่อเลื่อน Canvas</li>
-										<li>• กดปุ่ม Focus เพื่อให้แสดงบล็อกทั้งหมด</li>
-									</ul>
+									<p class="mb-2 font-semibold text-gray-300">บล็อกทั้งหมด</p>
+									<div class="space-y-3">
+										{#each blockCategories as cat}
+											<div>
+												<p class="mb-1 px-1 text-[10px] font-semibold uppercase tracking-widest text-gray-500">{cat.name}</p>
+												<ul>
+													{#each cat.blocks as def}
+														<li>
+															<button
+																onclick={() => helpBlockDef = def}
+																class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-gray-300 transition-colors hover:bg-gray-700/70 hover:text-white"
+															>
+																<span class="w-5 shrink-0 text-center text-sm leading-none">{def.icon}</span>
+																<span class="flex-1 truncate">{def.name}</span>
+																<span class="shrink-0 text-[9px] text-gray-600">›</span>
+															</button>
+														</li>
+													{/each}
+												</ul>
+											</div>
+										{/each}
+									</div>
 								</div>
 							</div>
 						{/if}
@@ -417,8 +445,9 @@
 		<!-- ── FlowEditor ───────────────────────────────────────────── -->
 		<FlowEditor
 			bind:this={editor}
+			categories={blockCategories}
 			onchange={handleEditorChange}
-			onhelp={(blockInfo: BlockDef) => { focusedBlock = blockInfo; activePanel = 'help'; }}
+			onhelp={openBlockHelp}
 		/>
 	</div>
 

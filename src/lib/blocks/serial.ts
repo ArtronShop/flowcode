@@ -13,7 +13,7 @@ export const serialCategory: BlockCategory = {
 			inputs: [{ id: 'before', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [{ id: 'next', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปยังบล็อกถัดไป' }],
 			params: [
-				{ id: 'baud', label: 'Baudrate', type: 'number', default: '115200' }
+				{ id: 'baud', label: 'Baudrate', type: 'number', default: '115200', description: 'ความเร็วสื่อสาร' }
 			],
 			toCode({ pad, params }) {
 				const val = params.baud ?? '';
@@ -35,7 +35,7 @@ export const serialCategory: BlockCategory = {
 			inputs: [{ id: 'before', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [{ id: 'next', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปยังบล็อกถัดไป' }],
 			params: [
-				{ id: 'text', label: 'Text', type: 'text', default: 'Hello, World !' }
+				{ id: 'text', label: 'Text', type: 'text', default: 'Hello, World !', 'description': 'ข้อความที่ต้องการส่งออก Serial' }
 			],
 			toCode({ pad, params }) {
 				let val = params.text ?? '';

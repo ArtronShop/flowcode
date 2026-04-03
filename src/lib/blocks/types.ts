@@ -73,6 +73,7 @@ export type CanvasBlock = {
 	outputs: Port[];
 	/** ค่าที่ผู้ใช้แก้ไขได้บนบล็อก เช่น { value: '42' } */
 	params: Record<string, string>;
+	note: string;
 };
 
 export type Connection = {
