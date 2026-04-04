@@ -9,7 +9,7 @@
 		User, Folder, LogOut, Copy, Terminal,
 		Files, Puzzle, CircleQuestionMark,
 		ArrowLeft, X, Download, Trash2, CircleCheck,
-		Cpu, Usb
+		Cpu, Usb,
 	} from 'lucide-svelte';
 
 	import sht4xExtension from '$lib/blocks/extension/SHT4x.flowext.js';
@@ -239,7 +239,7 @@
 				selectedBoard = next;
 			}
 		}
-		
+
 		// Load flow from local storage
 		const saved = localStorage.getItem('flowcode-project');
 		if (saved) editor?.importJson(saved);
@@ -307,7 +307,7 @@
 			<div class="mx-1 h-5 w-px bg-gray-700"></div>
 
 			<!-- Board selector -->
-			<div class="flex items-center gap-1 w-40">
+			<div class="flex items-center gap-1.5 w-40 px-1">
 				<Cpu size={13} class="shrink-0 text-gray-500" />
 				<select
 					class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-[12px] text-gray-200 focus:border-blue-500 focus:outline-none"
@@ -317,6 +317,20 @@
 					{#each boards as board}
 						<option value={board.id}>{board.name}</option>
 					{/each}
+				</select>
+			</div>
+
+			<!-- Port selector -->
+			<div class="flex items-center gap-1.5 w-25 px-1">
+				<Usb size={13} class="shrink-0 text-gray-500" />
+				<select
+					class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-[12px] text-gray-200 focus:border-blue-500 focus:outline-none"
+					value={''}
+					onchange={(e) => 1}
+				>
+					<!-- {#each [] as board}
+						<option value={board.id}>{board.name}</option>
+					{/each} -->
 				</select>
 			</div>
 
@@ -635,37 +649,39 @@
 				</div>
 			</div>
 		{/if}
+		
+		<div class="flex flex-col grow">
+			<!-- ── FlowEditor ───────────────────────────────────────────── -->
+			<FlowEditor
+				bind:this={editor}
+				categories={boardCategories}
+				onchange={handleEditorChange}
+				onhelp={openBlockHelp}
+			/>
 
-		<!-- ── FlowEditor ───────────────────────────────────────────── -->
-		<FlowEditor
-			bind:this={editor}
-			categories={boardCategories}
-			onchange={handleEditorChange}
-			onhelp={openBlockHelp}
-		/>
-	</div>
-
-	<!-- ─── C Code Console ──────────────────────────────────────────── -->
-	{#if showConsole}
-		<div class="flex h-52 flex-col border-t border-gray-700/60 bg-gray-950">
-			<div class="flex items-center justify-between border-b border-gray-800 bg-gray-900 px-3 py-1.5">
-				<div class="flex items-center gap-2">
-					<Terminal size={14} class="text-blue-400" />
-					<span class="text-[11px] font-semibold text-gray-400">C Code Output</span>
-					<span class="rounded bg-blue-900/50 px-1.5 py-0.5 text-[9px] text-blue-400">live</span>
+			<!-- ─── C Code Console ──────────────────────────────────────────── -->
+			{#if showConsole}
+				<div class="flex h-52 flex-col border-t border-gray-700/60 bg-gray-950">
+					<div class="flex items-center justify-between border-b border-gray-800 bg-gray-900 px-3 py-1.5">
+						<div class="flex items-center gap-2">
+							<Terminal size={14} class="text-blue-400" />
+							<span class="text-[11px] font-semibold text-gray-400">C Code Output</span>
+							<span class="rounded bg-blue-900/50 px-1.5 py-0.5 text-[9px] text-blue-400">live</span>
+						</div>
+						<button
+							onclick={() => navigator.clipboard.writeText(cCode)}
+							class="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-300"
+							title="คัดลอกโค้ด"
+						>
+							<Copy size={12} />
+							คัดลอก
+						</button>
+					</div>
+					<pre class="flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-green-300">{cCode}</pre>
 				</div>
-				<button
-					onclick={() => navigator.clipboard.writeText(cCode)}
-					class="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-300"
-					title="คัดลอกโค้ด"
-				>
-					<Copy size={12} />
-					คัดลอก
-				</button>
-			</div>
-			<pre class="flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-green-300">{cCode}</pre>
+			{/if}
 		</div>
-	{/if}
+	</div>
 
 	<!-- ─── Status bar ──────────────────────────────────────────────── -->
 	<footer class="flex items-center gap-4 border-t border-gray-800 bg-gray-900 px-4 py-1 text-[10px] text-gray-600">
