@@ -4,12 +4,13 @@
 	import ConfirmDialog, { type ConfirmOptions } from '$lib/components/ConfirmDialog.svelte';
 	import boards from '$lib/boards/index.js';
 	import type { BlockCategory, BlockDef } from '$lib/blocks/types.js';
+	import { FlowcodeAgent } from '$lib/agent/index.js';
 	import {
 		FilePlus, FolderOpen, Save, CirclePlay, SquareCode,
 		User, Folder, LogOut, Copy, Terminal,
 		Files, Puzzle, CircleQuestionMark,
 		ArrowLeft, X, Download, Trash2, CircleCheck,
-		Cpu, Usb,
+		Cpu, Usb, Wifi, WifiOff, ChevronsDown,
 	} from 'lucide-svelte';
 
 	import type { ExtensionProps } from '$lib/blocks/extension/types';
@@ -23,6 +24,22 @@
 
 	let selectedBoard = $state(boards[0]);
 	let boardConnected = $state(false);
+
+	// ─── FlowcodeAgent (shared instance) ────────────────────────────
+	const agent = new FlowcodeAgent('ws://localhost:8080');
+	let agentConnected = $state(false);
+	const installedCores = new Set<string>(); // track installed cores to skip re-install
+	let availablePorts = $state<string[]>([]);
+	let selectedPort = $state('');
+
+	async function connectAgent() {
+		try {
+			await agent.connect();
+			agentConnected = true;
+		} catch {
+			agentConnected = false;
+		}
+	}
 
 	// Merge board blocks + installed extension blocks (only installed extensions)
 	const boardCategories = $derived<BlockCategory[]>([
@@ -61,7 +78,27 @@
 
 	let editor = $state<FlowEditor | null>(null);
 	let cCode = $state('');
-	let showConsole = $state(false);
+	let runLogs = $state<string[]>([]);
+	let serialLogs = $state<string[]>([]);
+	let isRunning = $state(false);
+	type ConsoleTab = 'code' | 'run' | 'serial';
+	let activeConsoleTab = $state<ConsoleTab | null>(null);
+	let autoScrollRun = $state(true);
+	let autoScrollSerial = $state(true);
+	let runLogEl = $state<HTMLPreElement | null>(null);
+	let serialLogEl = $state<HTMLPreElement | null>(null);
+
+	$effect(() => {
+		if (autoScrollRun && runLogs.length > 0 && runLogEl) {
+			runLogEl.scrollTop = runLogEl.scrollHeight;
+		}
+	});
+
+	$effect(() => {
+		if (autoScrollSerial && serialLogs.length > 0 && serialLogEl) {
+			serialLogEl.scrollTop = serialLogEl.scrollHeight;
+		}
+	});
 	let showUserMenu = $state(false);
 	let status = $state<{
 		blockCount: number; connCount: number; zoom: number;
@@ -151,25 +188,78 @@
 	}
 
 	async function runProject() {
-		const data = editor?.generateCode() || '';
-		if ('showSaveFilePicker' in window) {
-			try {
-				const handle = await (window as any).showSaveFilePicker({
-					suggestedName: 'project.ino',
-					types: [{ description: 'Arduino Project', accept: { 'text/plain': ['.ino'] } }]
-				});
-				const writable = await handle.createWritable();
-				await writable.write(data);
-				await writable.close();
-			} catch (e: any) {
-				if (e.name !== 'AbortError') console.error(e);
+		if (isRunning) return;
+		isRunning = true;
+		runLogs = [];
+		activeConsoleTab = 'run';
+
+		const log = (msg: string) => { runLogs = [...runLogs, msg]; };
+
+		const sketchName = 'flowcode_project';
+		const code = editor?.generateCode() || '';
+		const board = selectedBoard;
+		const installedDeps = extensions
+			.filter((e) => e.installed && Array.isArray(e.depends))
+			.flatMap((e) => e.depends as string[]);
+
+		try {
+			if (!agentConnected) {
+				log('🔌 กำลังเชื่อมต่อ FlowcodeAgent...');
+				await connectAgent();
+				if (!agentConnected) throw new Error('ไม่สามารถเชื่อมต่อ FlowcodeAgent ได้');
+				log('✅ เชื่อมต่อสำเร็จ');
 			}
-		} else {
-			const a = document.createElement('a');
-			a.href = URL.createObjectURL(new Blob([data], { type: 'text/plain' }));
-			a.download = 'project.ino';
-			a.click();
-			URL.revokeObjectURL(a.href);
+			agent.onStream = (p) => { runLogs = [...runLogs, p.data]; };
+
+			// 1. Install core (ครั้งแรกเท่านั้น)
+			const coreKey = `${board.platform.id}@${board.platform.version}`;
+			if (!installedCores.has(coreKey)) {
+				log(`📦 ติดตั้ง core: ${coreKey}`);
+				await agent.installCore(board.platform.id, board.platform.version, board.platform.package);
+				installedCores.add(coreKey);
+				log('✅ ติดตั้ง core สำเร็จ');
+			} else {
+				log(`⏭ ข้าม core (ติดตั้งแล้ว): ${coreKey}`);
+			}
+
+			// 2. Install libraries
+			const allDeps = [...(board.depends ?? []), ...installedDeps];
+			if (allDeps.length > 0) {
+				log(`📚 ติดตั้ง library: ${allDeps.join(', ')}`);
+				await agent.installLibrary(allDeps);
+				log('✅ ติดตั้ง library สำเร็จ');
+			}
+
+			// 3. Write sketch
+			log(`📝 เขียน sketch: ${sketchName}`);
+			await agent.writeSketch(sketchName, code);
+			log('✅ เขียน sketch สำเร็จ');
+
+			// 4. Compile
+			log(`🔨 กำลัง compile (${board.fqbn})...`);
+			await agent.compile(sketchName, board.fqbn);
+			log('✅ Compile สำเร็จ');
+
+			// 5. Upload
+			if (!selectedPort) throw new Error('กรุณาเลือก Port ก่อน Upload');
+			log(`🚀 กำลัง upload ไปที่ ${selectedPort}...`);
+			await agent.upload(sketchName, board.fqbn, selectedPort);
+			log('✅ Upload สำเร็จ');
+
+		} catch (e: any) {
+			log(`❌ เกิดข้อผิดพลาด: ${e?.message ?? String(e)}`);
+		} finally {
+			isRunning = false;
+		}
+	}
+
+	async function refreshPorts() {
+		if (!agentConnected) { availablePorts = []; return; }
+		try {
+			const list = await agent.listPorts();
+			availablePorts = list.map(p => p.path);
+		} catch {
+			availablePorts = [];
 		}
 	}
 
@@ -184,15 +274,39 @@
 			}
 		}
 
+		// Restore installed extensions
+		const savedExtIds = localStorage.getItem('installed-extensions');
+		if (savedExtIds) {
+			const ids = new Set(JSON.parse(savedExtIds) as string[]);
+			extensions = extensions.map((e) => ({ ...e, installed: ids.has(e.id) }));
+		}
+
 		// Load flow from local storage
 		const saved = localStorage.getItem('flowcode-project');
 		if (saved) editor?.importJson(saved);
 
-		showConsole = localStorage.getItem('show-console') === '1';
+		const savedTab = localStorage.getItem('console-tab');
+		activeConsoleTab = (savedTab === 'code' || savedTab === 'run' || savedTab === 'serial') ? savedTab : null;
+
+		const savedPanel = localStorage.getItem('side-panel') as SidePanel;
+		activePanel = savedPanel ?? null;
+
+		// Connect FlowcodeAgent on startup (best-effort)
+		agent.onPortData = (p) => { serialLogs = [...serialLogs, String(p.data)]; };
+		connectAgent();
 	});
 
 	$effect(() => {
-		localStorage.setItem('show-console', showConsole ? '1' : '0');
+		localStorage.setItem('console-tab', activeConsoleTab ?? '');
+	});
+
+	$effect(() => {
+		const ids = extensions.filter((e) => e.installed).map((e) => e.id);
+		localStorage.setItem('installed-extensions', JSON.stringify(ids));
+	});
+
+	$effect(() => {
+		localStorage.setItem('side-panel', activePanel ?? '');
 	});
 
 	$effect(() => {
@@ -265,37 +379,35 @@
 			</div>
 
 			<!-- Port selector -->
-			<div class="flex items-center gap-1.5 w-25 px-1">
-				<Usb size={13} class="shrink-0 text-gray-500" />
+			<div class="flex items-center gap-1.5 w-36 px-1">
+				<Usb size={13} class="shrink-0 {agentConnected ? 'text-gray-400' : 'text-gray-600'}" />
 				<select
-					class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-[12px] text-gray-200 focus:border-blue-500 focus:outline-none"
-					value={''}
-					onchange={(e) => 1}
+					class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-[12px] text-gray-200 focus:border-blue-500 focus:outline-none disabled:opacity-40"
+					bind:value={selectedPort}
+					disabled={!agentConnected}
+					onfocus={() => refreshPorts()}
 				>
-					<!-- {#each [] as board}
-						<option value={board.id}>{board.name}</option>
-					{/each} -->
+					<!-- <option value="">-- เลือกพอร์ต --</option> -->
+					{#each availablePorts as port}
+						<option value={port}>{port}</option>
+					{/each}
 				</select>
 			</div>
 
 			<!-- Run -->
 			<button
 				onclick={() => runProject()}
-				class="flex items-center gap-1.5 rounded bg-green-700 px-2.5 py-1.5 text-xs text-white transition-colors hover:bg-green-600"
+				disabled={isRunning}
+				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-white transition-colors {isRunning ? 'cursor-not-allowed bg-green-900 opacity-60' : 'bg-green-700 hover:bg-green-600'}"
 			>
-				<CirclePlay size={16} />
-				<span>รัน</span>
+				{#if isRunning}
+					<span class="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+				{:else}
+					<CirclePlay size={16} />
+				{/if}
+				<span>{isRunning ? 'กำลังรัน...' : 'รัน'}</span>
 			</button>
 
-			<!-- Toggle C Code Console -->
-			<button
-				onclick={() => (showConsole = !showConsole)}
-				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs transition-colors {showConsole ? 'bg-blue-700 text-white hover:bg-blue-600' : 'text-gray-400 hover:bg-gray-700 hover:text-white'}"
-				title="แสดง/ซ่อนโค้ด C"
-			>
-				<SquareCode size={16} />
-				<span class="hidden sm:inline">โค้ด C</span>
-			</button>
 		</div>
 
 		<!-- User Avatar -->
@@ -348,7 +460,7 @@
 	<div class="flex flex-1 overflow-hidden">
 
 		<!-- ── Icon rail ───────────────────────────────────────────── -->
-		<nav class="flex w-12 flex-col items-center gap-1 border-r border-gray-700/60 bg-gray-900 py-2">
+		<nav class="flex w-12 flex-col shrink-0 items-center gap-1 border-r border-gray-700/60 bg-gray-900 py-2">
 			<button
 				onclick={() => togglePanel('files')}
 				class="flex h-9 w-9 items-center justify-center rounded-lg transition-colors {activePanel === 'files' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-700 hover:text-white'}"
@@ -375,7 +487,7 @@
 
 		<!-- ── Side panel ──────────────────────────────────────────── -->
 		{#if activePanel}
-			<div class="flex w-64 flex-col border-r border-gray-700/60 bg-gray-900">
+			<div class="flex w-64 flex-col shrink-0 border-r border-gray-700/60 bg-gray-900">
 				<!-- Panel header -->
 				<div class="flex items-center justify-between border-b border-gray-700/60 px-4 py-3">
 					<div class="flex gap-2">
@@ -594,7 +706,7 @@
 			</div>
 		{/if}
 		
-		<div class="flex flex-col grow">
+		<div class="flex min-h-0 min-w-0 flex-col grow">
 			<!-- ── FlowEditor ───────────────────────────────────────────── -->
 			<FlowEditor
 				bind:this={editor}
@@ -603,25 +715,92 @@
 				onhelp={openBlockHelp}
 			/>
 
-			<!-- ─── C Code Console ──────────────────────────────────────────── -->
-			{#if showConsole}
-				<div class="flex h-52 flex-col border-t border-gray-700/60 bg-gray-950">
-					<div class="flex items-center justify-between border-b border-gray-800 bg-gray-900 px-3 py-1.5">
-						<div class="flex items-center gap-2">
-							<Terminal size={14} class="text-blue-400" />
-							<span class="text-[11px] font-semibold text-gray-400">C Code Output</span>
-							<span class="rounded bg-blue-900/50 px-1.5 py-0.5 text-[9px] text-blue-400">live</span>
-						</div>
+			<!-- ─── Bottom Console Panel ───────────────────────────────────── -->
+			{#if activeConsoleTab !== null}
+				<div class="flex h-52 min-h-0 shrink-0 flex-col border-t border-gray-700/60 bg-gray-950">
+					<!-- Tab bar -->
+					<div class="flex items-center border-b border-gray-800 bg-gray-900">
 						<button
-							onclick={() => navigator.clipboard.writeText(cCode)}
-							class="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-300"
-							title="คัดลอกโค้ด"
+							onclick={() => activeConsoleTab = 'code'}
+							class="flex items-center gap-1.5 border-b-2 px-3 py-1.5 text-[11px] transition-colors {activeConsoleTab === 'code' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}"
 						>
-							<Copy size={12} />
-							คัดลอก
+							<SquareCode size={13} />C Code
+							<span class="rounded bg-blue-900/50 px-1 py-px text-[9px] text-blue-400">live</span>
+						</button>
+						<button
+							onclick={() => activeConsoleTab = 'run'}
+							class="flex items-center gap-1.5 border-b-2 px-3 py-1.5 text-[11px] transition-colors {activeConsoleTab === 'run' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}"
+						>
+							{#if isRunning}
+								<span class="inline-block h-3 w-3 animate-spin rounded-full border-2 border-blue-400 border-t-transparent"></span>
+							{:else}
+								<CirclePlay size={13} />
+							{/if}
+							Run Console
+						</button>
+						<button
+							onclick={() => activeConsoleTab = 'serial'}
+							class="flex items-center gap-1.5 border-b-2 px-3 py-1.5 text-[11px] transition-colors {activeConsoleTab === 'serial' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}"
+						>
+							<Terminal size={13} />Serial Monitor
+						</button>
+						<div class="flex-1"></div>
+						{#if activeConsoleTab === 'code'}
+							<button
+								onclick={() => navigator.clipboard.writeText(cCode)}
+								class="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-300"
+								title="คัดลอกโค้ด"
+							>
+								<Copy size={12} />คัดลอก
+							</button>
+						{:else if activeConsoleTab === 'run'}
+							<button
+								onclick={() => { autoScrollRun = !autoScrollRun; if (autoScrollRun && runLogEl) runLogEl.scrollTop = runLogEl.scrollHeight; }}
+								class="flex items-center gap-1 rounded px-2 py-1 text-[10px] transition-colors {autoScrollRun ? 'text-blue-400 hover:text-blue-300' : 'text-gray-500 hover:text-gray-300'}"
+								title="Auto scroll"
+							>
+								<ChevronsDown size={12} />Auto scroll
+							</button>
+						{:else if activeConsoleTab === 'serial'}
+							<button
+								onclick={() => { autoScrollSerial = !autoScrollSerial; if (autoScrollSerial && serialLogEl) serialLogEl.scrollTop = serialLogEl.scrollHeight; }}
+								class="flex items-center gap-1 rounded px-2 py-1 text-[10px] transition-colors {autoScrollSerial ? 'text-blue-400 hover:text-blue-300' : 'text-gray-500 hover:text-gray-300'}"
+								title="Auto scroll"
+							>
+								<ChevronsDown size={12} />Auto scroll
+							</button>
+						{/if}
+						<button
+							onclick={() => activeConsoleTab = null}
+							aria-label="ปิด"
+							class="px-2 py-1.5 text-gray-600 transition-colors hover:text-gray-300"
+						>
+							<X size={14} />
 						</button>
 					</div>
-					<pre class="flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-green-300">{cCode}</pre>
+
+					<!-- Tab content -->
+					{#if activeConsoleTab === 'code'}
+						<pre class="flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-green-300">{cCode}</pre>
+					{:else if activeConsoleTab === 'run'}
+						{#if runLogs.length === 0}
+							<div class="flex flex-1 items-center justify-center gap-2 text-[11px] text-gray-600">
+								<CirclePlay size={14} />
+								<span>กด <span class="text-gray-400">รัน</span> เพื่อเริ่มการ compile และ upload</span>
+							</div>
+						{:else}
+							<pre bind:this={runLogEl} class="min-h-0 flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-gray-300">{runLogs.join('\n')}</pre>
+						{/if}
+					{:else if activeConsoleTab === 'serial'}
+						{#if serialLogs.length === 0}
+							<div class="flex flex-1 items-center justify-center gap-2 text-[11px] text-gray-600">
+								<Terminal size={14} />
+								<span>เชื่อมต่อบอร์ดผ่าน USB เพื่อเปิด Serial Monitor</span>
+							</div>
+						{:else}
+							<pre bind:this={serialLogEl} class="min-h-0 flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-gray-300">{serialLogs.join('\n')}</pre>
+						{/if}
+					{/if}
 				</div>
 			{/if}
 		</div>
@@ -636,5 +815,22 @@
 			<Usb size={11} class={boardConnected ? 'text-green-500' : 'text-gray-600'} />
 			<span class={boardConnected ? 'text-green-400' : 'text-gray-600'}>{selectedBoard.name}</span>
 		</div>
+		<div class="flex items-center gap-1 {agentConnected ? 'text-green-400' : 'text-gray-600'}">
+			{#if agentConnected}
+				<Wifi size={11} />
+			{:else}
+				<WifiOff size={11} />
+			{/if}
+			<span>Agent</span>
+		</div>
+		<div class="mx-1 h-3 w-px bg-gray-700"></div>
+		<button
+			onclick={() => activeConsoleTab = activeConsoleTab !== null ? null : 'code'}
+			class="flex items-center gap-1 transition-colors {activeConsoleTab !== null ? 'text-blue-400 hover:text-blue-300' : 'text-gray-600 hover:text-gray-400'}"
+			title="แสดง/ซ่อน Console"
+		>
+			<SquareCode size={12} />
+			<span>Console</span>
+		</button>
 	</footer>
 </div>

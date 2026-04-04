@@ -51,6 +51,8 @@ export const triggerCategory: BlockCategory = {
 					id: 'interval',
 					type: 'option',
 					options: [
+						{ label: "every 0.1 second", value: "100" },
+						{ label: "every 0.5 seconds", value: "500" },
 						{ label: "every 1 second", value: "1 * 1000" },
 						{ label: "every 5 seconds", value: "5 * 1000" },
 						{ label: "every 10 seconds", value: "10 * 1000" },
@@ -74,7 +76,8 @@ export const triggerCategory: BlockCategory = {
 					`  for (;;) {`,
 					body.split('\n').map(l => `  ${l}`).join('\n'),
 					`    vTaskDelay((${interval}) / portTICK_PERIOD_MS);`,
-					`  }`
+					`  }`,
+					`  vTaskDelete(NULL);`,
 				].join('\n');
 				registerFunction(
 					`void ${fn}(void* pvParameters)`,
@@ -160,7 +163,9 @@ export const triggerCategory: BlockCategory = {
 				const priority = params.stack ?? '8192';
 				registerFunction(
 					`void ${fn}(void* pvParameters)`,
-					body + '\n\n' + pad + 'vTaskDelete(NULL);',
+					body + '\n' +
+					'\n' + 
+					pad + 'vTaskDelete(NULL);',
 					`void ${fn}(void* pvParameters);`
 				);
 				return {
