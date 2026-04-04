@@ -12,19 +12,24 @@
 		Cpu, Usb,
 	} from 'lucide-svelte';
 
-	import sht4xExtension from '$lib/blocks/extension/SHT4x.flowext.js';
-	import sht3xExtension from '$lib/blocks/extension/SHT3x.flowext.js';
+	import type { ExtensionProps } from '$lib/blocks/extension/types';
+	import extensionIndex from '$lib/blocks/extension';
 
-	// TODO: add extension install work
+	type ExtensionItem = ExtensionProps & {
+		installed: boolean;
+	};
+
+	let extensions = $state<ExtensionItem[]>(extensionIndex.map((e) => ({ ...e, installed: false })));
 
 	let selectedBoard = $state(boards[0]);
 	let boardConnected = $state(false);
 
-	// Merge board blocks + installed extension blocks
+	// Merge board blocks + installed extension blocks (only installed extensions)
 	const boardCategories = $derived<BlockCategory[]>([
 		...selectedBoard.blocks,
-		sht4xExtension,
-		sht3xExtension,
+		...extensions
+			.filter((e) => e.installed && typeof e.src !== 'string')
+			.map((e) => e.src as BlockCategory),
 	]);
 
 	function changeBoard(boardId: string) {
@@ -46,67 +51,6 @@
 			selectedBoard = next;
 		}
 	}
-
-	type ExtensionItem = {
-		id: string;
-		name: string;
-		author: string;
-		description: string;
-		version: string;
-		depends?: string[]; // list of Arduino Library (name@version eg. ArduinoGraphics@1.1.0)
-		src: string;
-		installed: boolean;
-	};
-
-	const mockExtensions: ExtensionItem[] = [
-		{
-			id: 'ext-dht',
-			name: 'DHT Sensor',
-			author: 'FlowCode Team',
-			description: 'บล็อกอ่านค่าอุณหภูมิและความชื้นจากเซ็นเซอร์ DHT11 / DHT22',
-			version: '1.0.0',
-			src: '',
-			installed: true,
-		},
-		{
-			id: 'ext-i2c-lcd',
-			name: 'I2C LCD Display',
-			author: 'FlowCode Team',
-			description: 'บล็อกควบคุม LCD 16x2 ผ่าน I2C (LiquidCrystal_I2C)',
-			version: '1.1.2',
-			src: '',
-			installed: false,
-		},
-		{
-			id: 'ext-wifi',
-			name: 'WiFi & HTTP',
-			author: 'community',
-			description: 'บล็อกเชื่อมต่อ WiFi และส่ง HTTP GET/POST สำหรับ ESP32',
-			version: '0.9.1',
-			src: '',
-			installed: false,
-		},
-		{
-			id: 'ext-servo',
-			name: 'Servo Motor',
-			author: 'community',
-			description: 'บล็อกควบคุม Servo Motor กำหนดองศาและความเร็ว',
-			version: '1.0.3',
-			src: '',
-			installed: false,
-		},
-		{
-			id: 'ext-neopixel',
-			name: 'NeoPixel LED',
-			author: 'FlowCode Team',
-			description: 'บล็อกควบคุม WS2812B / NeoPixel Strip กำหนดสีแบบ RGB',
-			version: '1.2.0',
-			src: '',
-			installed: false,
-		},
-	];
-
-	let extensions = $state(mockExtensions.map((e) => ({ ...e })));
 
 	type SidePanel = 'files' | 'extensions' | 'help' | null;
 	let activePanel = $state<SidePanel>(null);
@@ -508,7 +452,7 @@
 							{/each}
 							<hr class="border-gray-700/60" />
 							<p class="mb-3 text-[11px] text-gray-500">ยังไม่ติดตั้ง</p>
-							{#each extensions as ext}
+							{#each extensions.filter(a => !a.installed) as ext}
 								<div class="rounded-lg border border-gray-700/60 bg-gray-800/40 px-3 py-2.5 text-xs">
 									<div class="flex items-start gap-2">
 										<div class="min-w-0 flex-1">
