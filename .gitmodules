@@ -1,0 +1,3 @@
+[submodule "src/lib/blocks/extension"]
+	path = src/lib/blocks/extension
+	url = https://github.com/ArtronShop/flowcode-extension
