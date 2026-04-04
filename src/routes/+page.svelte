@@ -231,6 +231,16 @@
 
 	// Auto load project from Local Storage
 	onMount(() => {
+		// Load board select from local storage
+		const selectedBoardId = localStorage.getItem('board-select');
+		if (selectedBoardId) { 
+			const next = boards.find((b) => b.id === selectedBoardId);
+			if (next) {
+				selectedBoard = next;
+			}
+		}
+		
+		// Load flow from local storage
 		const saved = localStorage.getItem('flowcode-project');
 		if (saved) editor?.importJson(saved);
 
@@ -239,7 +249,11 @@
 
 	$effect(() => {
 		localStorage.setItem('show-console', showConsole ? '1' : '0');
-	})
+	});
+
+	$effect(() => {
+		localStorage.setItem('board-select', selectedBoard.id);
+	});
 </script>
 
 <ConfirmDialog
