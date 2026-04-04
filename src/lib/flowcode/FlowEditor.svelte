@@ -556,6 +556,11 @@
 	export function clear() {
 		canvasBlocks = [];
 		connections = [];
+		selectedBlockId = null;
+		selectedConnId = null;
+		zoom = 1;
+		panX = 0;
+		panY = 0;
 		onchange?.('project:clear');
 	}
 

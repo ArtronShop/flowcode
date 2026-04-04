@@ -2,37 +2,50 @@
 	import { onMount } from 'svelte';
 	import FlowEditor, { type FlowEditorEvent } from '$lib/flowcode/FlowEditor.svelte';
 	import ConfirmDialog, { type ConfirmOptions } from '$lib/components/ConfirmDialog.svelte';
-	import { blockCategories as defaultBlockCategories } from '$lib/blocks/index.js';
+	import boards from '$lib/boards/index.js';
 	import type { BlockCategory, BlockDef } from '$lib/blocks/types.js';
 	import {
 		FilePlus, FolderOpen, Save, CirclePlay, SquareCode,
 		User, Folder, LogOut, Copy, Terminal,
 		Files, Puzzle, CircleQuestionMark,
-		ArrowLeft, X, Download, Trash2, CircleCheck
+		ArrowLeft, X, Download, Trash2, CircleCheck,
+		Cpu, Usb
 	} from 'lucide-svelte';
-
-	type BoardItem = {
-		id: string;
-		fqbn: string;
-		platform: {
-			id: string;
-			version: string;
-			package: string; // Package Index URL (.json)
-		}
-	}
 
 	import sht4xExtension from '$lib/blocks/extension/SHT4x.flowext.js';
 	import sht3xExtension from '$lib/blocks/extension/SHT3x.flowext.js';
 
-	const blockCategories: BlockCategory[] = [ 
-		...defaultBlockCategories,
-
-		// Extension
-		sht4xExtension,
-		sht3xExtension
-	];
-	
 	// TODO: add extension install work
+
+	let selectedBoard = $state(boards[0]);
+	let boardConnected = $state(false);
+
+	// Merge board blocks + installed extension blocks
+	const boardCategories = $derived<BlockCategory[]>([
+		...selectedBoard.blocks,
+		sht4xExtension,
+		sht3xExtension,
+	]);
+
+	function changeBoard(boardId: string) {
+		const next = boards.find((b) => b.id === boardId);
+		if (!next || next.id === selectedBoard.id) return;
+		console.log('blockList', editor?.blockList());
+		if ((editor?.blockList().length ?? 0) > 0) {
+			confirmDialogOption = {
+				title: 'เปลี่ยนบอร์ด',
+				message: `เปลี่ยนเป็น "${next.name}" จะล้างบล็อกทั้งหมดในพื้นที่ทำงาน ยืนยันหรือไม่?`,
+				confirmLabel: 'เปลี่ยนบอร์ด',
+				onconfirm: () => {
+					selectedBoard = next;
+					editor?.clear();
+				},
+			};
+			confirmDialogOpen = true;
+		} else {
+			selectedBoard = next;
+		}
+	}
 
 	type ExtensionItem = {
 		id: string;
@@ -40,6 +53,7 @@
 		author: string;
 		description: string;
 		version: string;
+		depends?: string[]; // list of Arduino Library (name@version eg. ArduinoGraphics@1.1.0)
 		src: string;
 		installed: boolean;
 	};
@@ -277,6 +291,20 @@
 			</button>
 
 			<div class="mx-1 h-5 w-px bg-gray-700"></div>
+
+			<!-- Board selector -->
+			<div class="flex items-center gap-1 w-40">
+				<Cpu size={13} class="shrink-0 text-gray-500" />
+				<select
+					class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-[12px] text-gray-200 focus:border-blue-500 focus:outline-none"
+					value={selectedBoard.id}
+					onchange={(e) => changeBoard((e.target as HTMLSelectElement).value)}
+				>
+					{#each boards as board}
+						<option value={board.id}>{board.name}</option>
+					{/each}
+				</select>
+			</div>
 
 			<!-- Run -->
 			<button
@@ -566,7 +594,7 @@
 								<div>
 									<p class="mb-2 font-semibold text-gray-300">บล็อกทั้งหมด</p>
 									<div class="space-y-3">
-										{#each blockCategories as cat}
+										{#each boardCategories as cat}
 											<div>
 												<p class="mb-1 px-1 text-[10px] font-semibold uppercase tracking-widest text-gray-500">{cat.name}</p>
 												<ul>
@@ -597,7 +625,7 @@
 		<!-- ── FlowEditor ───────────────────────────────────────────── -->
 		<FlowEditor
 			bind:this={editor}
-			categories={blockCategories}
+			categories={boardCategories}
 			onchange={handleEditorChange}
 			onhelp={openBlockHelp}
 		/>
@@ -630,5 +658,9 @@
 		<span>บล็อก: <span class="text-gray-400">{status?.blockCount ?? 0}</span></span>
 		<span>การเชื่อมต่อ: <span class="text-gray-400">{status?.connCount ?? 0}</span></span>
 		<button class="ml-auto text-gray-500 hover:text-gray-400" onclick={() => editor?.zoomReset()}>{Math.round((status?.zoom ?? 1) * 100)}%</button>
+		<div class="flex items-center gap-1.5">
+			<Usb size={11} class={boardConnected ? 'text-green-500' : 'text-gray-600'} />
+			<span class={boardConnected ? 'text-green-400' : 'text-gray-600'}>{selectedBoard.name}</span>
+		</div>
 	</footer>
 </div>
