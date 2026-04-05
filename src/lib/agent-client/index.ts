@@ -1,54 +1,109 @@
 import type { BoardOption, PortDataPayload, PortProps, StreamPayload, WsMessage } from "./types";
 
-export class FlowcodeAgent {
+const RECONNECT_DELAY = 3000;
+
+export class FlowcodeAgentClient {
     private ws: WebSocket | null = null;
     private callbacks: Map<string, { resolve: (val: any) => void; reject: (err: Error) => void }> = new Map();
-    
+    private shouldReconnect = false;
+    private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
     // Callbacks สำหรับเหตุการณ์ต่างๆ
     public onStream?: (payload: StreamPayload) => void;
     public onPortData?: (payload: PortDataPayload) => void;
+    public onConnect?: () => void;
+    public onDisconnect?: () => void;
 
     constructor(private url: string = "ws://localhost:8080") {}
 
-    public connect(): Promise<void> {
-        return new Promise((resolve, reject) => {
+    /** เชื่อมต่อครั้งแรก และเปิดใช้งาน auto-reconnect */
+    public start(): void {
+        this.shouldReconnect = true;
+        this._connect();
+    }
+
+    /** หยุด auto-reconnect และปิด WebSocket */
+    public stop(): void {
+        this.shouldReconnect = false;
+        if (this.reconnectTimer !== null) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+        this.ws?.close();
+    }
+
+    private _connect(): void {
+        if (this.reconnectTimer !== null) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+
+        try {
             this.ws = new WebSocket(this.url);
+        } catch {
+            this._scheduleReconnect();
+            return;
+        }
 
-            this.ws.onopen = () => resolve();
+        this.ws.onopen = () => {
+            this.onConnect?.();
+        };
 
-            this.ws.onmessage = (event: MessageEvent) => {
-                try {
-                    const response: WsMessage = JSON.parse(event.data);
-                    const { id, type, payload } = response;
+        this.ws.onmessage = (event: MessageEvent) => {
+            try {
+                const response: WsMessage = JSON.parse(event.data);
+                const { id, type, payload } = response;
 
-                    switch (type) {
-                        case "stream":
-                            this.onStream?.(payload);
-                            break;
-                        case "port.data":
-                            this.onPortData?.(payload);
-                            break;
-                        case "error":
-                            if (id && this.callbacks.has(id)) {
-                                this.callbacks.get(id)?.reject(new Error(payload));
-                                this.callbacks.delete(id);
-                            }
-                            break;
-                        case "result":
-                            if (id && this.callbacks.has(id)) {
-                                this.callbacks.get(id)?.resolve(payload);
-                                this.callbacks.delete(id);
-                            }
-                            break;
-                    }
-                } catch (e) {
-                    console.error("Parse error:", e);
+                switch (type) {
+                    case "stream":
+                        this.onStream?.(payload);
+                        break;
+                    case "port.data":
+                        this.onPortData?.(payload);
+                        break;
+                    case "error":
+                        if (id && this.callbacks.has(id)) {
+                            this.callbacks.get(id)?.reject(new Error(payload));
+                            this.callbacks.delete(id);
+                        }
+                        break;
+                    case "result":
+                        if (id && this.callbacks.has(id)) {
+                            this.callbacks.get(id)?.resolve(payload);
+                            this.callbacks.delete(id);
+                        }
+                        break;
                 }
-            };
+            } catch (e) {
+                console.error("Parse error:", e);
+            }
+        };
 
-            this.ws.onerror = (err) => reject(err);
-            this.ws.onclose = () => console.log("Agent Disconnected");
-        });
+        this.ws.onerror = () => {
+            // onclose จะถูกเรียกต่อจาก onerror อัตโนมัติ
+        };
+
+        this.ws.onclose = () => {
+            this.onDisconnect?.();
+            // Reject pending callbacks
+            for (const [, cb] of this.callbacks) {
+                cb.reject(new Error("WebSocket disconnected"));
+            }
+            this.callbacks.clear();
+
+            if (this.shouldReconnect) {
+                this._scheduleReconnect();
+            }
+        };
+    }
+
+    private _scheduleReconnect(): void {
+        this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            if (this.shouldReconnect) {
+                this._connect();
+            }
+        }, RECONNECT_DELAY);
     }
 
     private _send<T>(action: string, params: object = {}): Promise<T> {
@@ -65,9 +120,9 @@ export class FlowcodeAgent {
     // ─── Board & Core ──────────────────────────────────────────────
 
     public listBoards() { return this._send<any[]>("board.list"); }
-    
-    public listAllBoards(fqbn: string = "") { 
-        return this._send<any[]>("board.listall", { fqbn }); 
+
+    public listAllBoards(fqbn: string = "") {
+        return this._send<any[]>("board.listall", { fqbn });
     }
 
     public installCore(id: string, version: string, package_index?: string) {
@@ -108,16 +163,12 @@ export class FlowcodeAgent {
         return this._send<{ ok: boolean }>("upload", { sketch, fqbn, port, boardOption });
     }
 
-    // ─── Serial Port (New!) ────────────────────────────────────────
+    // ─── Serial Port ───────────────────────────────────────────────
 
     public listPorts() {
         return this._send<PortProps[]>("port.list");
     }
 
-    /**
-     * เชื่อมต่อ Serial Port เพื่อรับ-ส่งข้อมูล
-     * ข้อมูลที่ส่งกลับมาจากบอร์ดจะเข้าที่ callback `onPortData`
-     */
     public connectPort(port: string, baudRate: number = 9600) {
         return this._send<{ ok: boolean }>("port.connect", { port, baudRate });
     }
