@@ -30,7 +30,8 @@
 	// ─── FlowcodeAgent (shared instance) ────────────────────────────
 	const agent = new FlowcodeAgentClient('ws://localhost:8080');
 	let agentConnected = $state(false);
-	const installedCores = new Set<string>(); // track installed cores to skip re-install
+	const installedCores = new Set<string>();
+	const installedLibs = new Set<string>();
 	let availablePorts = $state<string[]>([]);
 	let selectedPort = $state('');
 
@@ -79,6 +80,7 @@
 	let serialConnected = $state(false);
 	let serialBaudRate = $state('115200');
 	let serialMessage = $state('');
+	let serialLineEnding = $state('');
 	let isConnectingSerial = $state(false);
 	let isRunning = $state(false);
 	type ConsoleTab = 'code' | 'run' | 'serial';
@@ -191,7 +193,7 @@
 		if (isRunning) return;
 		isRunning = true;
 		runLogs = [];
-		activeConsoleTab = 'run';
+		// activeConsoleTab = 'run';
 
 		const log = (msg: string) => { runLogs = [...runLogs, msg]; };
 
@@ -219,12 +221,16 @@
 				log(`⏭ ข้าม core (ติดตั้งแล้ว): ${coreKey}`);
 			}
 
-			// 2. Install libraries
+			// 2. Install libraries (ติดตั้งเฉพาะที่ยังไม่เคยติดตั้ง)
 			const allDeps = [...(board.depends ?? []), ...installedDeps];
-			if (allDeps.length > 0) {
-				log(`📚 ติดตั้ง library: ${allDeps.join(', ')}`);
-				await agent.installLibrary(allDeps);
+			const newDeps = allDeps.filter((d) => !installedLibs.has(d));
+			if (newDeps.length > 0) {
+				log(`📚 ติดตั้ง library: ${newDeps.join(', ')}`);
+				await agent.installLibrary(newDeps);
+				newDeps.forEach((d) => installedLibs.add(d));
 				log('✅ ติดตั้ง library สำเร็จ');
+			} else if (allDeps.length > 0) {
+				log(`⏭ ข้าม library (ติดตั้งแล้วทั้งหมด)`);
 			}
 
 			// 3. Write sketch
@@ -251,7 +257,7 @@
 			log('✅ Upload สำเร็จ');
 
 			if (serialConnectAfterUpload) {
-				setTimeout(toggleSerialConnect, 2000); // wait port are ready again before connect
+				setTimeout(toggleSerialConnect, 500); // wait port are ready again before connect
 			}
 		} catch (e: any) {
 			log(`❌ เกิดข้อผิดพลาด: ${e?.message ?? String(e)}`);
@@ -295,7 +301,7 @@
 	async function sendSerialMessage() {
 		if (!serialConnected || !serialMessage.trim()) return;
 		try {
-			await agent.writePort(selectedPort, serialMessage);
+			await agent.writePort(selectedPort, serialMessage + serialLineEnding);
 			// serialLogs = [...serialLogs, `> ${serialMessage}`];
 			serialMessage = '';
 		} catch (e: any) {
@@ -376,31 +382,31 @@
 			<!-- New Project -->
 			<button
 				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
-				title="สร้างโปรเจคใหม่"
+				title="New"
 				onclick={() => newProject()}
 			>
 				<FilePlus size={16} />
-				<span class="hidden sm:inline">สร้างโปรเจคใหม่</span>
+				<span class="hidden sm:inline">New</span>
 			</button>
 
 			<!-- Open Project -->
 			<button
 				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
-				title="เปิดโปรเจค"
+				title="Open"
 				onclick={() => openProject()}
 			>
 				<FolderOpen size={16} />
-				<span class="hidden sm:inline">เปิดโปรเจค</span>
+				<span class="hidden sm:inline">Open</span>
 			</button>
 
 			<!-- Save Project -->
 			<button
 				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
-				title="บันทึกโปรเจค"
+				title="Save"
 				onclick={() => saveProject()}
 			>
 				<Save size={16} />
-				<span class="hidden sm:inline">บันทึก</span>
+				<span class="hidden sm:inline">Save</span>
 			</button>
 
 			<div class="mx-1 h-5 w-px bg-gray-700"></div>
@@ -425,8 +431,8 @@
 					loadOptions={refreshPorts}
 					onchange={(v) => selectedPort = v}
 					disabled={!agentConnected}
-					placeholder="เลือกพอร์ต"
-					emptyText="ไม่พบพอร์ต USB"
+					placeholder="Select Port"
+					emptyText="Not Found"
 					style="font-size:12px; padding: 3px 8px;"
 				/>
 			</div>
@@ -442,9 +448,17 @@
 				{:else}
 					<CirclePlay size={16} />
 				{/if}
-				<span>{isRunning ? 'กำลังรัน...' : 'รัน'}</span>
+				<span>{isRunning ? 'Running...' : 'Run'}</span>
 			</button>
 
+			<button
+				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+				onclick={() => activeConsoleTab = "serial"}
+				disabled={isRunning}
+			>
+				<Terminal size={16} />
+				<span>Serial Monitor</span>
+			</button>
 		</div>
 
 		<!-- User Avatar -->
@@ -780,15 +794,18 @@
 							class="flex items-center gap-1.5 border-b-2 px-3 py-1.5 text-[11px] transition-colors {activeConsoleTab === 'serial' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}"
 						>
 							<Terminal size={13} />Serial Monitor
+							{#if serialConnected}
+								<span class="rounded bg-blue-900/50 px-1 py-px text-[9px] text-blue-400">live</span>
+							{/if}
 						</button>
 						<div class="flex-1"></div>
 						{#if activeConsoleTab === 'code'}
 							<button
 								onclick={() => navigator.clipboard.writeText(cCode)}
 								class="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-300"
-								title="คัดลอกโค้ด"
+								title="Copy"
 							>
-								<Copy size={12} />คัดลอก
+								<Copy size={12} />Copy
 							</button>
 						{:else if activeConsoleTab === 'run'}
 							<button
@@ -798,6 +815,13 @@
 							>
 								<ChevronsDown size={12} />Auto scroll
 							</button>
+							<button
+								onclick={() => runLogs = []}
+								class="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-300"
+								title="Clear"
+							>
+								<Trash2 size={12} />Clear
+							</button>
 						{:else if activeConsoleTab === 'serial'}
 							<button
 								onclick={() => { autoScrollSerial = !autoScrollSerial; if (autoScrollSerial && serialLogEl) serialLogEl.scrollTop = serialLogEl.scrollHeight; }}
@@ -805,6 +829,13 @@
 								title="Auto scroll"
 							>
 								<ChevronsDown size={12} />Auto scroll
+							</button>
+							<button
+								onclick={() => serialLogs = []}
+								class="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-300"
+								title="Clear"
+							>
+								<Trash2 size={12} />Clear
 							</button>
 						{/if}
 						<button
@@ -835,9 +866,25 @@
 								bind:value={serialMessage}
 								onkeydown={(e) => e.key === 'Enter' && sendSerialMessage()}
 								disabled={!serialConnected}
-								class="min-w-0 flex-1 rounded border border-gray-700 bg-gray-900 px-2 py-1 font-mono text-[11px] text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-40"
-								placeholder={serialConnected ? 'พิมพ์แล้วกด Enter เพื่อส่ง...' : ''}
+								class="grow rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
+								placeholder={serialConnected ? 'Message (Enter to send message)' : ''}
+								style="height:30px;"
 							/>
+							<div class="w-14 shrink-0">
+								<Dropdown
+									value={serialLineEnding}
+									options={[
+										{ label: '-', value: '' },
+										{ label: '\\r', value: '\r' },
+										{ label: '\\n', value: '\n' },
+										{ label: '\\r\\n', value: '\r\n' },
+									]}
+									onchange={(v) => { serialLineEnding = v; }}
+									disabled={!serialConnected}
+									placeholder="Line Ending"
+									style="height:30px; font-size:10px;"
+								/>
+							</div>
 							<div class="w-20 shrink-0">
 								<Dropdown
 									value={serialBaudRate}
@@ -845,13 +892,13 @@
 									onchange={(v) => { serialBaudRate = v; }}
 									disabled={serialConnected || !agentConnected}
 									placeholder="Baud rate"
-									style="font-size:11px; padding: 2px 6px;"
+									style="height:30px; font-size:10px;"
 								/>
 							</div>
 							<button
 								onclick={toggleSerialConnect}
 								disabled={!agentConnected || !selectedPort || isConnectingSerial}
-								class="flex shrink-0 items-center gap-1.5 rounded px-2.5 py-1 text-[11px] font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 {serialConnected ? 'bg-red-700 hover:bg-red-600' : 'bg-blue-700 hover:bg-blue-600'}"
+								class="h-7.5 flex shrink-0 items-center gap-1.5 rounded px-2.5 py-1 text-[11px] text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 {serialConnected ? 'bg-red-700 hover:bg-red-600' : 'bg-blue-700 hover:bg-blue-600'}"
 							>
 								{#if isConnectingSerial}
 									<LoaderCircle size={11} class="animate-spin" />
@@ -860,27 +907,11 @@
 								{:else}
 									<Usb size={11} />
 								{/if}
-								{serialConnected ? 'ยกเลิก' : 'เชื่อมต่อ'}
+								{serialConnected ? 'Disconnect' : 'Connect'}
 							</button>
-							{#if serialLogs.length > 0}
-								<button
-									onclick={() => serialLogs = []}
-									class="rounded px-1.5 py-1 text-gray-600 transition-colors hover:bg-gray-700 hover:text-gray-300"
-									title="ล้าง log"
-								>
-									<Trash2 size={11} />
-								</button>
-							{/if}
 						</div>
 						<!-- Log area -->
-						{#if serialLogs.length === 0}
-							<div class="flex flex-1 items-center justify-center gap-2 text-[11px] text-gray-600">
-								<Terminal size={14} />
-								<span>{selectedPort ? `พร้อมเชื่อมต่อ ${selectedPort}` : 'เลือกพอร์ตและกดเชื่อมต่อ'}</span>
-							</div>
-						{:else}
-							<pre bind:this={serialLogEl} class="min-h-0 flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-gray-300">{serialLogs.join('')}</pre>
-						{/if}
+						<pre bind:this={serialLogEl} class="min-h-0 flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-gray-300">{serialLogs.join('')}</pre>
 					{/if}
 				</div>
 			{/if}
@@ -889,8 +920,8 @@
 
 	<!-- ─── Status bar ──────────────────────────────────────────────── -->
 	<footer class="flex items-center gap-4 border-t border-gray-800 bg-gray-900 px-4 py-1 text-[10px] text-gray-600">
-		<span>บล็อก: <span class="text-gray-400">{status?.blockCount ?? 0}</span></span>
-		<span>การเชื่อมต่อ: <span class="text-gray-400">{status?.connCount ?? 0}</span></span>
+		<span>Block: <span class="text-gray-400">{status?.blockCount ?? 0}</span></span>
+		<span>Connection: <span class="text-gray-400">{status?.connCount ?? 0}</span></span>
 		<button class="ml-auto text-gray-500 hover:text-gray-400" onclick={() => editor?.zoomReset()}>{Math.round((status?.zoom ?? 1) * 100)}%</button>
 		<div class="flex items-center gap-1.5">
 			<Usb size={11} class={boardConnected ? 'text-green-500' : 'text-gray-600'} />
