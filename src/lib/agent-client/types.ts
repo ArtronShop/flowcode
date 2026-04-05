@@ -14,7 +14,7 @@ export interface BoardOption {
 
 export interface WsMessage {
     id?: string;
-    type: "result" | "stream" | "error" | "port.data";
+    type: "result" | "stream" | "error" | "port.data" | "port.close";
     payload: any;
 }
 

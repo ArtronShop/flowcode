@@ -11,6 +11,7 @@ export class FlowcodeAgentClient {
     // Callbacks สำหรับเหตุการณ์ต่างๆ
     public onStream?: (payload: StreamPayload) => void;
     public onPortData?: (payload: PortDataPayload) => void;
+    public onPortClose?: () => void;
     public onConnect?: () => void;
     public onDisconnect?: () => void;
 
@@ -60,6 +61,9 @@ export class FlowcodeAgentClient {
                         break;
                     case "port.data":
                         this.onPortData?.(payload);
+                        break;
+                    case "port.close":
+                        this.onPortClose?.();
                         break;
                     case "error":
                         if (id && this.callbacks.has(id)) {

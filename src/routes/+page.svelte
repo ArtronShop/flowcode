@@ -3,6 +3,7 @@
 	import FlowEditor, { type FlowEditorEvent } from '$lib/flowcode/FlowEditor.svelte';
 	import ConfirmDialog, { type ConfirmOptions } from '$lib/components/ConfirmDialog.svelte';
 	import Dropdown from '$lib/components/Dropdown.svelte';
+	import CodeViewer from '$lib/components/CodeViewer.svelte';
 	import boards from '$lib/boards/index.js';
 	import type { BlockCategory, BlockDef } from '$lib/blocks/types.js';
 	import { FlowcodeAgentClient } from '$lib/agent-client/index.js';
@@ -11,7 +12,7 @@
 		User, Folder, LogOut, Copy, Terminal,
 		Files, Puzzle, CircleQuestionMark,
 		ArrowLeft, X, Download, Trash2, CircleCheck,
-		Cpu, Usb, Wifi, WifiOff, ChevronsDown,
+		Cpu, Usb, Wifi, WifiOff, ChevronsDown, LoaderCircle, CircleStop,
 	} from 'lucide-svelte';
 
 	import type { ExtensionProps } from '$lib/blocks/extension/types';
@@ -75,6 +76,10 @@
 	let cCode = $state('');
 	let runLogs = $state<string[]>([]);
 	let serialLogs = $state<string[]>([]);
+	let serialConnected = $state(false);
+	let serialBaudRate = $state('115200');
+	let serialMessage = $state('');
+	let isConnectingSerial = $state(false);
 	let isRunning = $state(false);
 	type ConsoleTab = 'code' | 'run' | 'serial';
 	let activeConsoleTab = $state<ConsoleTab | null>(null);
@@ -232,12 +237,22 @@
 			await agent.compile(sketchName, board.fqbn);
 			log('✅ Compile สำเร็จ');
 
+			// Disconnect Serial Port before upload
+			let serialConnectAfterUpload = false;
+			if (serialConnected) {
+				toggleSerialConnect(); // call it for disconnect
+				serialConnectAfterUpload = true;
+			}
+
 			// 5. Upload
 			if (!selectedPort) throw new Error('กรุณาเลือก Port ก่อน Upload');
 			log(`🚀 กำลัง upload ไปที่ ${selectedPort}...`);
 			await agent.upload(sketchName, board.fqbn, selectedPort);
 			log('✅ Upload สำเร็จ');
 
+			if (serialConnectAfterUpload) {
+				setTimeout(toggleSerialConnect, 2000); // wait port are ready again before connect
+			}
 		} catch (e: any) {
 			log(`❌ เกิดข้อผิดพลาด: ${e?.message ?? String(e)}`);
 		} finally {
@@ -254,6 +269,37 @@
 		} catch {
 			availablePorts = [];
 			return [];
+		}
+	}
+
+	async function toggleSerialConnect() {
+		if (!selectedPort) return;
+		isConnectingSerial = true;
+		try {
+			if (serialConnected) {
+				await agent.disconnectPort(selectedPort);
+				serialConnected = false;
+				// serialLogs = [...serialLogs, `[disconnected from ${selectedPort}]`];
+			} else {
+				await agent.connectPort(selectedPort, Number(serialBaudRate));
+				serialConnected = true;
+				// serialLogs = [...serialLogs, `[connected to ${selectedPort} @ ${serialBaudRate} baud]`];
+			}
+		} catch (e: any) {
+			serialLogs = [...serialLogs, `[error: ${e?.message ?? String(e)}]`];
+		} finally {
+			isConnectingSerial = false;
+		}
+	}
+
+	async function sendSerialMessage() {
+		if (!serialConnected || !serialMessage.trim()) return;
+		try {
+			await agent.writePort(selectedPort, serialMessage);
+			// serialLogs = [...serialLogs, `> ${serialMessage}`];
+			serialMessage = '';
+		} catch (e: any) {
+			serialLogs = [...serialLogs, `[send error: ${e?.message ?? String(e)}]\n`];
 		}
 	}
 
@@ -287,6 +333,7 @@
 
 		// Connect FlowcodeAgent on startup with auto-reconnect
 		agent.onPortData = (p) => { serialLogs = [...serialLogs, String(p.data)]; };
+		agent.onPortClose = () => { serialConnected = false; };
 		agent.start();
 	});
 
@@ -771,7 +818,7 @@
 
 					<!-- Tab content -->
 					{#if activeConsoleTab === 'code'}
-						<pre class="flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-green-300">{cCode}</pre>
+						<CodeViewer code={cCode} lang="c" />
 					{:else if activeConsoleTab === 'run'}
 						{#if runLogs.length === 0}
 							<div class="flex flex-1 items-center justify-center gap-2 text-[11px] text-gray-600">
@@ -782,13 +829,57 @@
 							<pre bind:this={runLogEl} class="min-h-0 flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-gray-300">{runLogs.join('\n')}</pre>
 						{/if}
 					{:else if activeConsoleTab === 'serial'}
+						<!-- Serial toolbar -->
+						<div class="flex items-center gap-1.5 border-b border-gray-800 bg-gray-950 px-2 py-1.5">
+							<input
+								bind:value={serialMessage}
+								onkeydown={(e) => e.key === 'Enter' && sendSerialMessage()}
+								disabled={!serialConnected}
+								class="min-w-0 flex-1 rounded border border-gray-700 bg-gray-900 px-2 py-1 font-mono text-[11px] text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-40"
+								placeholder={serialConnected ? 'พิมพ์แล้วกด Enter เพื่อส่ง...' : ''}
+							/>
+							<div class="w-20 shrink-0">
+								<Dropdown
+									value={serialBaudRate}
+									options={[300,900,750,1200,2400,4800,9600,19200,31250,38400,57600,74880,115200,230400,250000,460800,500000,921600,1000000,2000000].map(n => ({ value: String(n), label: String(n) }))}
+									onchange={(v) => { serialBaudRate = v; }}
+									disabled={serialConnected || !agentConnected}
+									placeholder="Baud rate"
+									style="font-size:11px; padding: 2px 6px;"
+								/>
+							</div>
+							<button
+								onclick={toggleSerialConnect}
+								disabled={!agentConnected || !selectedPort || isConnectingSerial}
+								class="flex shrink-0 items-center gap-1.5 rounded px-2.5 py-1 text-[11px] font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 {serialConnected ? 'bg-red-700 hover:bg-red-600' : 'bg-blue-700 hover:bg-blue-600'}"
+							>
+								{#if isConnectingSerial}
+									<LoaderCircle size={11} class="animate-spin" />
+								{:else if serialConnected}
+									<CircleStop size={11} />
+								{:else}
+									<Usb size={11} />
+								{/if}
+								{serialConnected ? 'ยกเลิก' : 'เชื่อมต่อ'}
+							</button>
+							{#if serialLogs.length > 0}
+								<button
+									onclick={() => serialLogs = []}
+									class="rounded px-1.5 py-1 text-gray-600 transition-colors hover:bg-gray-700 hover:text-gray-300"
+									title="ล้าง log"
+								>
+									<Trash2 size={11} />
+								</button>
+							{/if}
+						</div>
+						<!-- Log area -->
 						{#if serialLogs.length === 0}
 							<div class="flex flex-1 items-center justify-center gap-2 text-[11px] text-gray-600">
 								<Terminal size={14} />
-								<span>เชื่อมต่อบอร์ดผ่าน USB เพื่อเปิด Serial Monitor</span>
+								<span>{selectedPort ? `พร้อมเชื่อมต่อ ${selectedPort}` : 'เลือกพอร์ตและกดเชื่อมต่อ'}</span>
 							</div>
 						{:else}
-							<pre bind:this={serialLogEl} class="min-h-0 flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-gray-300">{serialLogs.join('\n')}</pre>
+							<pre bind:this={serialLogEl} class="min-h-0 flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-gray-300">{serialLogs.join('')}</pre>
 						{/if}
 					{/if}
 				</div>
