@@ -2,9 +2,10 @@
 	import { onMount } from 'svelte';
 	import FlowEditor, { type FlowEditorEvent } from '$lib/flowcode/FlowEditor.svelte';
 	import ConfirmDialog, { type ConfirmOptions } from '$lib/components/ConfirmDialog.svelte';
+	import Dropdown from '$lib/components/Dropdown.svelte';
 	import boards from '$lib/boards/index.js';
 	import type { BlockCategory, BlockDef } from '$lib/blocks/types.js';
-	import { FlowcodeAgent } from '$lib/agent/index.js';
+	import { FlowcodeAgentClient } from '$lib/agent-client/index.js';
 	import {
 		FilePlus, FolderOpen, Save, CirclePlay, SquareCode,
 		User, Folder, LogOut, Copy, Terminal,
@@ -26,20 +27,14 @@
 	let boardConnected = $state(false);
 
 	// ─── FlowcodeAgent (shared instance) ────────────────────────────
-	const agent = new FlowcodeAgent('ws://localhost:8080');
+	const agent = new FlowcodeAgentClient('ws://localhost:8080');
 	let agentConnected = $state(false);
 	const installedCores = new Set<string>(); // track installed cores to skip re-install
 	let availablePorts = $state<string[]>([]);
 	let selectedPort = $state('');
 
-	async function connectAgent() {
-		try {
-			await agent.connect();
-			agentConnected = true;
-		} catch {
-			agentConnected = false;
-		}
-	}
+	agent.onConnect = () => { agentConnected = true; };
+	agent.onDisconnect = () => { agentConnected = false; };
 
 	// Merge board blocks + installed extension blocks (only installed extensions)
 	const boardCategories = $derived<BlockCategory[]>([
@@ -204,10 +199,7 @@
 
 		try {
 			if (!agentConnected) {
-				log('🔌 กำลังเชื่อมต่อ FlowcodeAgent...');
-				await connectAgent();
-				if (!agentConnected) throw new Error('ไม่สามารถเชื่อมต่อ FlowcodeAgent ได้');
-				log('✅ เชื่อมต่อสำเร็จ');
+				throw new Error('ไม่สามารถเชื่อมต่อ FlowcodeAgent ได้ กรุณารอสักครู่แล้วลองใหม่');
 			}
 			agent.onStream = (p) => { runLogs = [...runLogs, p.data]; };
 
@@ -254,12 +246,14 @@
 	}
 
 	async function refreshPorts() {
-		if (!agentConnected) { availablePorts = []; return; }
+		if (!agentConnected) { availablePorts = []; return []; }
 		try {
 			const list = await agent.listPorts();
 			availablePorts = list.map(p => p.path);
+			return availablePorts.map(p => ({ value: p, label: p }));
 		} catch {
 			availablePorts = [];
+			return [];
 		}
 	}
 
@@ -291,9 +285,9 @@
 		const savedPanel = localStorage.getItem('side-panel') as SidePanel;
 		activePanel = savedPanel ?? null;
 
-		// Connect FlowcodeAgent on startup (best-effort)
+		// Connect FlowcodeAgent on startup with auto-reconnect
 		agent.onPortData = (p) => { serialLogs = [...serialLogs, String(p.data)]; };
-		connectAgent();
+		agent.start();
 	});
 
 	$effect(() => {
@@ -367,31 +361,27 @@
 			<!-- Board selector -->
 			<div class="flex items-center gap-1.5 w-40 px-1">
 				<Cpu size={13} class="shrink-0 text-gray-500" />
-				<select
-					class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-[12px] text-gray-200 focus:border-blue-500 focus:outline-none"
+				<Dropdown
 					value={selectedBoard.id}
-					onchange={(e) => changeBoard((e.target as HTMLSelectElement).value)}
-				>
-					{#each boards as board}
-						<option value={board.id}>{board.name}</option>
-					{/each}
-				</select>
+					options={boards.map((b) => ({ value: b.id, label: b.name }))}
+					onchange={(v) => changeBoard(v)}
+					placeholder="เลือกบอร์ด"
+					style="font-size:12px; padding: 3px 8px;"
+				/>
 			</div>
 
 			<!-- Port selector -->
 			<div class="flex items-center gap-1.5 w-36 px-1">
 				<Usb size={13} class="shrink-0 {agentConnected ? 'text-gray-400' : 'text-gray-600'}" />
-				<select
-					class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-[12px] text-gray-200 focus:border-blue-500 focus:outline-none disabled:opacity-40"
-					bind:value={selectedPort}
+				<Dropdown
+					value={selectedPort}
+					loadOptions={refreshPorts}
+					onchange={(v) => selectedPort = v}
 					disabled={!agentConnected}
-					onfocus={() => refreshPorts()}
-				>
-					<!-- <option value="">-- เลือกพอร์ต --</option> -->
-					{#each availablePorts as port}
-						<option value={port}>{port}</option>
-					{/each}
-				</select>
+					placeholder="เลือกพอร์ต"
+					emptyText="ไม่พบพอร์ต USB"
+					style="font-size:12px; padding: 3px 8px;"
+				/>
 			</div>
 
 			<!-- Run -->

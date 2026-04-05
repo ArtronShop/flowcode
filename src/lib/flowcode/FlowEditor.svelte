@@ -13,6 +13,7 @@
 	} from '$lib/blocks/types.js';
 	import { flowToC } from './engine.js';
 	import BlockContextMenu from '$lib/components/BlockContextMenu.svelte';
+	import Dropdown from '$lib/components/Dropdown.svelte';
 
 	interface Props {
 		/** หมวดหมู่บล็อกที่แสดงในแผง Palette (default: ทุก category) */
@@ -754,16 +755,13 @@
 										<span class="text-[9px] text-gray-500 leading-tight">{pDef.label}</span>
 									{/if}
 									{#if pDef.type === 'option'}
-										<select
-											class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
-											style="height:{PARAM_INPUT_H}px"
+										<Dropdown
+											value={pVal}
+											options={pDef.options}
+											onchange={(v) => updateBlockParam(block.id, pDef.id, v)}
 											onmousedown={(e) => e.stopPropagation()}
-											onchange={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLSelectElement).value)}
-										>
-											{#each pDef.options as opt}
-												<option value={opt.value} selected={pVal === opt.value}>{opt.label}</option>
-											{/each}
-										</select>
+											style="height:{PARAM_INPUT_H}px; font-size:10px;"
+										/>
 									{:else if pDef.type === 'number'}
 										<input
 											class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
