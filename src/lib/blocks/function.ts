@@ -18,7 +18,7 @@ export const functionCategory: BlockCategory = {
 				return {
 					parts: [
 						[`${pad}${fn_name}();`],
-						{ portId: 'return', depthDelta: 0 }
+						{ portId: 'out', depthDelta: 0 }
 					]
 				};
 			}
