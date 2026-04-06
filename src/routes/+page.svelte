@@ -157,8 +157,8 @@
 			zoom: editor!.getZoom(),
 		};
 
-		/*if (event === 'zoom' || event === 'block:focus' || event === 'block:blur'
-			|| event === 'conn:focus' || event === 'conn:blur' || event === 'block:move') return;*/
+		if (event === 'zoom' || event === 'block:focus' || event === 'block:blur'
+			|| event === 'conn:focus' || event === 'conn:blur' || event === 'block:move') return;
 
 		// Save to Local Storage
 		const json = editor!.exportJson();

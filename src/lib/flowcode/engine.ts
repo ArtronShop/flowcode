@@ -50,7 +50,8 @@ export function flowToC(
 		if (!fromBlock) return null;
 		const fromDef = defMap[fromBlock.typeId];
 		if (fromDef?.toExpr) return fromDef.toExpr(fromBlock.params ?? {});
-		if (fromBlock.outputs?.[0]?.dataType === 'void') return null;
+		const fromPort = fromBlock.outputs?.find((p) => p.id === conn.fromPortId);
+		if (!fromPort || fromPort.dataType === 'void' || fromPort.dataType === 'any') return null;
 		return safeId(fromBlock.id);
 	}
 
@@ -60,7 +61,9 @@ export function flowToC(
 		);
 		if (conns.length === 0) return '';
 		const buf: string[] = [];
-		const visitedSet = new Set<string>();
+		// Seed with fromBlockId so the source block cannot be re-traversed
+		// inside its own captureCode (prevents infinite recursion with make_function)
+		const visitedSet = new Set<string>([fromBlockId]);
 		for (const conn of conns) {
 			traverseTo(conn.toBlockId, baseDepth, buf, visitedSet);
 		}
@@ -93,7 +96,7 @@ export function flowToC(
 			const srcDef = defMap[src.typeId];
 			if (!srcDef || srcDef.toExpr) continue;
 			const srcPort = src.outputs.find((p) => p.id === conn.fromPortId);
-			if (!srcPort || srcPort.dataType === 'void') continue;
+			if (!srcPort || srcPort.dataType === 'void' || srcPort.dataType === 'any') continue;
 			traverseTo(src.id, depth, target, visitedSet);
 		}
 
