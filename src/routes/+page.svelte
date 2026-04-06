@@ -13,6 +13,7 @@
 		Files, Puzzle, CircleQuestionMark,
 		ArrowLeft, X, Download, Trash2, CircleCheck,
 		Cpu, Usb, Wifi, WifiOff, ChevronsDown, LoaderCircle, CircleStop,
+        ChevronRight,
 	} from 'lucide-svelte';
 
 	import type { ExtensionProps } from '$lib/blocks/extension/types';
@@ -89,6 +90,42 @@
 	let autoScrollSerial = $state(true);
 	let runLogEl = $state<HTMLPreElement | null>(null);
 	let serialLogEl = $state<HTMLPreElement | null>(null);
+	let consoleHeight = $state(208);
+	let isResizing = $state(false);
+	let panelWidth = $state(256);
+	let isPanelResizing = $state(false);
+
+	function startPanelResize(e: MouseEvent) {
+		const startX = e.clientX;
+		const startWidth = panelWidth;
+		isPanelResizing = true;
+		const onMove = (e: MouseEvent) => {
+			panelWidth = Math.max(160, Math.min(480, startWidth + e.clientX - startX));
+		};
+		const onUp = () => {
+			isPanelResizing = false;
+			window.removeEventListener('mousemove', onMove);
+			window.removeEventListener('mouseup', onUp);
+		};
+		window.addEventListener('mousemove', onMove);
+		window.addEventListener('mouseup', onUp);
+	}
+
+	function startResize(e: MouseEvent) {
+		const startY = e.clientY;
+		const startHeight = consoleHeight;
+		isResizing = true;
+		const onMove = (e: MouseEvent) => {
+			consoleHeight = Math.max(80, Math.min(600, startHeight + startY - e.clientY));
+		};
+		const onUp = () => {
+			isResizing = false;
+			window.removeEventListener('mousemove', onMove);
+			window.removeEventListener('mouseup', onUp);
+		};
+		window.addEventListener('mousemove', onMove);
+		window.addEventListener('mouseup', onUp);
+	}
 
 	$effect(() => {
 		if (autoScrollRun && runLogs.length > 0 && runLogEl) {
@@ -337,6 +374,16 @@
 		const savedPanel = localStorage.getItem('side-panel') as SidePanel;
 		activePanel = savedPanel ?? null;
 
+		const savedConsoleHeight = localStorage.getItem('console-height');
+		if (savedConsoleHeight) {
+			consoleHeight = Math.max(80, Math.min(600, +savedConsoleHeight));
+		}
+
+		const savedPanelWidth = localStorage.getItem('panel-width');
+		if (savedPanelWidth) {
+			panelWidth = Math.max(160, Math.min(480, +savedPanelWidth));
+		}
+
 		// Connect FlowcodeAgent on startup with auto-reconnect
 		agent.onPortData = (p) => { serialLogs = [...serialLogs, String(p.data)]; };
 		agent.onPortClose = () => { serialConnected = false; };
@@ -359,12 +406,28 @@
 	$effect(() => {
 		localStorage.setItem('board-select', selectedBoard.id);
 	});
+
+	$effect(() => {
+		localStorage.setItem('console-height', consoleHeight.toString());
+	});
+
+	$effect(() => {
+		localStorage.setItem('panel-width', panelWidth.toString());
+	});
 </script>
 
 <ConfirmDialog
 	bind:open={confirmDialogOpen}
 	{...confirmDialogOption}
 />
+
+<!-- Resize overlay: blocks all pointer events while dragging -->
+{#if isResizing}
+	<div class="fixed inset-0 z-50 cursor-ns-resize"></div>
+{/if}
+{#if isPanelResizing}
+	<div class="fixed inset-0 z-50 cursor-ew-resize"></div>
+{/if}
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
@@ -538,7 +601,13 @@
 
 		<!-- ── Side panel ──────────────────────────────────────────── -->
 		{#if activePanel}
-			<div class="flex w-64 flex-col shrink-0 border-r border-gray-700/60 bg-gray-900">
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div class="relative flex shrink-0 flex-col border-r border-gray-700/60 bg-gray-900" style="width: {panelWidth}px">
+				<!-- Resize handle -->
+				<div
+					class="absolute -right-1 top-0 bottom-0 w-2 cursor-ew-resize z-20 transition-colors {isPanelResizing ? 'bg-blue-500/20' : 'hover:bg-blue-500/20'}"
+					onmousedown={startPanelResize}
+				></div>
 				<!-- Panel header -->
 				<div class="flex items-center justify-between border-b border-gray-700/60 px-4 py-3">
 					<div class="flex gap-2">
@@ -741,7 +810,7 @@
 															>
 																<span class="w-5 shrink-0 text-center text-sm leading-none">{def.icon}</span>
 																<span class="flex-1 truncate">{def.name}</span>
-																<span class="shrink-0 text-[9px] text-gray-600">›</span>
+																<span class="shrink-0 text-gray-600"><ChevronRight size={12} /></span>
 															</button>
 														</li>
 													{/each}
@@ -768,7 +837,13 @@
 
 			<!-- ─── Bottom Console Panel ───────────────────────────────────── -->
 			{#if activeConsoleTab !== null}
-				<div class="flex h-52 min-h-0 shrink-0 flex-col border-t border-gray-700/60 bg-gray-950">
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div class="relative flex min-h-0 shrink-0 flex-col border-t border-gray-700/60 bg-gray-950" style="height: {consoleHeight}px">
+					<!-- Resize handle (overlaps the border, no extra height) -->
+					<div
+						class="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize z-10 transition-colors {isResizing ? 'bg-blue-500/20' : 'hover:bg-blue-500/20'}"
+						onmousedown={startResize}
+					></div>
 					<!-- Tab bar -->
 					<div class="flex items-center border-b border-gray-800 bg-gray-900">
 						<button
