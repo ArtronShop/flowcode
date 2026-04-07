@@ -135,6 +135,11 @@ export type CodeGenContext = {
 	 */
 	registerGlobal: (declaration: string) => void;
 	/**
+	 * ลงทะเบียน polling code — ใส่ลง loop()
+	 * เช่น 'int counter = 0;'
+	 */
+	registerPollingCode: (code: string) => void;
+	/**
 	 * คืนชื่อ variable / expression ของบล็อกที่ต่อเข้ามาทาง input port นี้
 	 * ถ้าไม่มีการต่อเส้น จะ throw เพื่อให้ toCode() จัดการ fallback เอง
 	 */
@@ -146,11 +151,12 @@ type PramBase = {
 	label?: string;
 	description?: string;
 	default?: string;
+	hidden?: (ctx: { params: Record<string, string>; }) => boolean | boolean;
 };
 
 export type ParamOption = PramBase & {
 	type: 'option';
-	options: { label: string; value: string }[];
+	options: { label: string; value: string; description?: string; }[];
 };
 
 export type ParamText = PramBase & {

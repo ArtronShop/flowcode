@@ -25,6 +25,7 @@ export function flowToC(
 	const INDENT = '  ';
 	const preprocessors = new Set<string>(['#include <Arduino.h>']);
 	const globals = new Set<string>();
+	const polling = new Set<string>();
 	const functionDecls = new Map<string, string>(); // header → declaration
 	const functionDefs = new Map<string, string>();   // header → full def
 	const safeId = (id: string) => id.replace(/-/g, '_');
@@ -41,6 +42,10 @@ export function flowToC(
 
 	function registerGlobal(declaration: string) {
 		globals.add(declaration.trim());
+	}
+
+	function registerPollingCode(code: string) {
+		polling.add(code.trim());
 	}
 
 	function resolveInput(blockId: string, portId: string): string | null {
@@ -113,6 +118,7 @@ export function flowToC(
 				registerFunction,
 				registerPreprocessor,
 				registerGlobal,
+				registerPollingCode,
 				resolveInput: (portId) => resolveInput(blockId, portId)
 			});
 		} catch (err) {
@@ -143,6 +149,12 @@ export function flowToC(
 	}
 	setupLines.push('}');
 
+	const loopLines: string[] = [
+		'void loop() {',
+		[...polling].map(a => (INDENT + a.replaceAll('\n', '\n' + INDENT))).join('\n').trimEnd(''),
+		'}'
+	];
+
 	const sections: string[] = [];
 
 	// 1. preprocessor directives
@@ -162,7 +174,7 @@ export function flowToC(
 	sections.push(setupLines.join('\n'));
 
 	// 5. loop()
-	sections.push('void loop() { }');
+	sections.push(loopLines.join('\n'));
 
 	// 6. function definitions
 	if (functionDefs.size > 0) {
