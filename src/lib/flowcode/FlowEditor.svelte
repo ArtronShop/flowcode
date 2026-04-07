@@ -9,7 +9,8 @@
 		Connection,
 		BlockDef,
 		BlockCategory,
-		DataType
+		DataType,
+		ParamVarname
 	} from '$lib/blocks/types.js';
 	import { flowToC } from './engine.js';
 	import BlockContextMenu from '$lib/components/BlockContextMenu.svelte';
@@ -49,6 +50,39 @@
 	// ─── Canvas state ───────────────────────────────────────────────
 	let canvasBlocks = $state<CanvasBlock[]>([]);
 	let connections = $state<Connection[]>([]);
+
+	// ─── Varname registry ────────────────────────────────────────────
+	// category → string[] เช่น { http: ['http', 'http2'], tcp: ['client'] }
+	let varnameRegistry = $state<Record<string, string[]>>({
+		http: ['http'],
+		tcp: ['tcpClient'],
+		udp: ['udp'],
+		file: ['myFile'],
+	});
+
+	function getVarnameOptions(category: string) {
+		const names = varnameRegistry[category] ?? [];
+		return [
+			...names.map((n) => ({ label: n, value: n })),
+			{ label: '+ New...', value: '__new__' },
+		];
+	}
+
+	function handleVarnameChange(blockId: string, paramId: string, category: string, value: string) {
+		if (value !== '__new__') {
+			updateBlockParam(blockId, paramId, value);
+			return;
+		}
+		// prompt for new varname
+		const name = window.prompt(`ชื่อตัวแปรใหม่ (${category}):`);
+		if (!name || !name.trim()) return;
+		const trimmed = name.trim().replace(/[^a-zA-Z0-9_]/g, '_');
+		if (!varnameRegistry[category]) varnameRegistry[category] = [];
+		if (!varnameRegistry[category].includes(trimmed)) {
+			varnameRegistry[category] = [...varnameRegistry[category], trimmed];
+		}
+		updateBlockParam(blockId, paramId, trimmed);
+	}
 	let nextId = 1;
 
 	let draggingFromPalette = $state<BlockDef | null>(null);
@@ -535,7 +569,7 @@
 	export function getSelectedConn() { return selectedConnId !== null; }
 
 	export function exportJson() {
-		return JSON.stringify({ canvasBlocks, connections }, null, 2);
+		return JSON.stringify({ canvasBlocks, connections, varnameRegistry }, null, 2);
 	}
 
 	export function importJson(text: string) {
@@ -544,6 +578,9 @@
 			if (Array.isArray(data.canvasBlocks) && Array.isArray(data.connections)) {
 				canvasBlocks = data.canvasBlocks;
 				connections = data.connections;
+				if (data.varnameRegistry && typeof data.varnameRegistry === 'object') {
+					varnameRegistry = data.varnameRegistry;
+				}
 				const ids = canvasBlocks.map((b) => parseInt(b.id.replace('block-', '')) || 0);
 				const connIds = connections.map((c) => parseInt(c.id.replace('conn-', '')) || 0);
 				nextId = Math.max(0, ...ids, ...connIds) + 1;
@@ -754,7 +791,15 @@
 									{#if pDef.label}
 										<span class="text-[9px] text-gray-500 leading-tight">{pDef.label}</span>
 									{/if}
-									{#if pDef.type === 'option'}
+									{#if pDef.type === 'varname'}
+										<Dropdown
+											value={pVal}
+											options={getVarnameOptions((pDef as ParamVarname).category)}
+											onchange={(v) => handleVarnameChange(block.id, pDef.id, (pDef as ParamVarname).category, v)}
+											onmousedown={(e) => e.stopPropagation()}
+											style="height:{PARAM_INPUT_H}px; font-size:10px;"
+										/>
+									{:else if pDef.type === 'option'}
 										<Dropdown
 											value={pVal}
 											options={pDef.options}
