@@ -140,6 +140,10 @@
 		if (!params || params.length === 0) return 0;
 		let h = 8;
 		for (let i = 0; i < params.length; i++) {
+			// Check hidden
+			const defHidden = params[i].hidden;
+			if (typeof defHidden === "function" ? defHidden({ params: block.params }) : typeof defHidden === "boolean" ? defHidden : false) continue;
+			
 			if (i > 0) h += PARAM_GAP;
 			if (params[i].label) { h += PARAM_LABEL_H; h += PARAM_GAP; }
 			h += PARAM_INPUT_H;
@@ -787,45 +791,48 @@
 						{#if blockDef?.params && blockDef.params.length > 0}
 							<div class="absolute flex flex-col gap-1 px-2 pt-1 pb-1" style="top:{BLOCK_HEADER + blockPortH(block)}px; left:0; right:0;">
 								{#each blockDef.params as pDef}
-									{@const pVal = block.params?.[pDef.id] ?? paramDefault(pDef)}
-									{#if pDef.label}
-										<span class="text-[9px] text-gray-500 leading-tight">{pDef.label}</span>
-									{/if}
-									{#if pDef.type === 'varname'}
-										<Dropdown
-											value={pVal}
-											options={getVarnameOptions((pDef as ParamVarname).category)}
-											onchange={(v) => handleVarnameChange(block.id, pDef.id, (pDef as ParamVarname).category, v)}
-											onmousedown={(e) => e.stopPropagation()}
-											style="height:{PARAM_INPUT_H}px; font-size:10px;"
-										/>
-									{:else if pDef.type === 'option'}
-										<Dropdown
-											value={pVal}
-											options={pDef.options}
-											onchange={(v) => updateBlockParam(block.id, pDef.id, v)}
-											onmousedown={(e) => e.stopPropagation()}
-											style="height:{PARAM_INPUT_H}px; font-size:10px;"
-										/>
-									{:else if pDef.type === 'number'}
-										<input
-											class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
-											style="height:{PARAM_INPUT_H}px"
-											type="number"
-											step="any"
-											value={pVal}
-											onmousedown={(e) => e.stopPropagation()}
-											onchange={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLInputElement).value)}
-										/>
-									{:else}
-										<input
-											class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
-											style="height:{PARAM_INPUT_H}px"
-											type="text"
-											value={pVal}
-											onmousedown={(e) => e.stopPropagation()}
-											oninput={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLInputElement).value)}
-										/>
+									{@const pHidden = typeof pDef.hidden === "function" ? pDef.hidden({ params: block.params }) : typeof pDef.hidden === "boolean" ? pDef.hidden : false}
+									{#if !pHidden}
+										{@const pVal = block.params?.[pDef.id] ?? paramDefault(pDef)}
+										{#if pDef.label}
+											<span class="text-[9px] text-gray-500 leading-tight">{pDef.label}</span>
+										{/if}
+										{#if pDef.type === 'varname'}
+											<Dropdown
+												value={pVal}
+												options={getVarnameOptions((pDef as ParamVarname).category)}
+												onchange={(v) => handleVarnameChange(block.id, pDef.id, (pDef as ParamVarname).category, v)}
+												onmousedown={(e) => e.stopPropagation()}
+												style="height:{PARAM_INPUT_H}px; font-size:10px;"
+											/>
+										{:else if pDef.type === 'option'}
+											<Dropdown
+												value={pVal}
+												options={pDef.options}
+												onchange={(v) => updateBlockParam(block.id, pDef.id, v)}
+												onmousedown={(e) => e.stopPropagation()}
+												style="height:{PARAM_INPUT_H}px; font-size:10px;"
+											/>
+										{:else if pDef.type === 'number'}
+											<input
+												class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
+												style="height:{PARAM_INPUT_H}px"
+												type="number"
+												step="any"
+												value={pVal}
+												onmousedown={(e) => e.stopPropagation()}
+												onchange={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLInputElement).value)}
+											/>
+										{:else}
+											<input
+												class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
+												style="height:{PARAM_INPUT_H}px"
+												type="text"
+												value={pVal}
+												onmousedown={(e) => e.stopPropagation()}
+												oninput={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLInputElement).value)}
+											/>
+										{/if}
 									{/if}
 								{/each}
 							</div>
