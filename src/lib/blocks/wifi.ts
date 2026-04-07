@@ -11,43 +11,48 @@ export const wifiCategory: BlockCategory = {
 			category: 'wifi',
 			description: 'เชื่อมต่อ WiFi โดยใช้ SSID และ Password (WiFi.begin)',
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
-			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไป' }],
+			outputs: [
+				{ id: 'ok', type: 'output', label: 'OK', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไป' },
+				{ id: 'error', type: 'output', label: 'Error', dataType: 'void', description: 'เชื่อมต่อ WiFi ไม่สำเร็จ (หมดเวลารอ)' }
+			],
 			params: [
 				{ id: 'ssid', type: 'text', label: 'SSID', default: 'MyWiFi', description: 'ชื่อเครือข่าย WiFi' },
 				{ id: 'password', type: 'text', label: 'Password', default: 'mypassword', description: 'รหัสผ่าน WiFi' },
+				{ id: 'wait_connected', type: 'option', label: 'Wait Connected', options: [
+					{ label: 'Yes', value: 'Y' },
+					{ label: 'No', value: 'N' },
+				]},
+				{ id: 'timeout_ms', type: 'number', label: 'Max wait time (ms)', default: '30000', validation: (n: number) => Math.max(100, n), description: 'ระยะเวลารอเชื่อมต่อนานสุด', hidden: ({ params }) => params.wait_connected === 'N' },
 			],
 			toCode({ pad, params, registerPreprocessor }) {
 				registerPreprocessor('#include <WiFi.h>');
 				const ssid = (params.ssid ?? 'MyWiFi').replaceAll('"', '\\"');
 				const password = (params.password ?? '').replaceAll('"', '\\"');
+				const wait_connected = params.wait_connected === 'Y';
+				const timeout = params.timeout_ms ?? '30000';
+
+				const allStatement: any[] = [];
+				allStatement.push([`${pad}WiFi.begin("${ssid}", "${password}");`]);
+				if (wait_connected) {
+					allStatement.push([`${pad}{ // wait WiFi connect with timeout ${timeout} ms`]);
+					allStatement.push([`${pad}  uint32_t timeout = ${timeout};`]);
+					allStatement.push([`${pad}  while((WiFi.status() != WL_CONNECTED) && (timeout > 0)) {`]);
+					allStatement.push([`${pad}    delay(100);`]);
+					allStatement.push([`${pad}    timeout -= 100;`]);
+					allStatement.push([`${pad}  }`]);
+					allStatement.push([`${pad}}`]);
+				}
+				if (wait_connected) {
+					allStatement.push([`${pad}if (WiFi.status() == WL_CONNECTED) {`]);
+					allStatement.push({ portId: 'ok', depthDelta: 1 });
+					allStatement.push([`${pad}} else {`]);
+					allStatement.push({ portId: 'error', depthDelta: 1 });
+					allStatement.push([`${pad}}`]);
+				} else {
+					allStatement.push({ portId: 'ok', depthDelta: 0 });
+				}
 				return {
-					parts: [
-						[`${pad}WiFi.begin("${ssid}", "${password}");`],
-						{ portId: 'out', depthDelta: 0 }
-					]
-				};
-			}
-		},
-		{
-			id: 'wifi_wait_connected',
-			name: 'WiFi Wait Connected',
-			color: '#06b6d4',
-			icon: '⏳',
-			category: 'wifi',
-			description: 'รอจนกว่า WiFi จะเชื่อมต่อสำเร็จ (blocking loop พร้อม delay)',
-			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
-			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปหลังเชื่อมต่อสำเร็จ' }],
-			params: [
-				{ id: 'delay_ms', type: 'number', label: 'Delay (ms)', default: '500', description: 'หน่วงเวลาระหว่างการตรวจสอบ' },
-			],
-			toCode({ pad, params, registerPreprocessor }) {
-				registerPreprocessor('#include <WiFi.h>');
-				const d = params.delay_ms ?? '500';
-				return {
-					parts: [
-						[`${pad}while (WiFi.status() != WL_CONNECTED) { delay(${d}); }`],
-						{ portId: 'out', depthDelta: 0 }
-					]
+					parts: allStatement
 				};
 			}
 		},
@@ -59,14 +64,20 @@ export const wifiCategory: BlockCategory = {
 			category: 'wifi',
 			description: 'ตรวจสอบสถานะการเชื่อมต่อ WiFi ปัจจุบัน',
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
-			outputs: [{ id: 'connected', type: 'output', label: 'Connected', dataType: 'bool', description: 'true ถ้าเชื่อมต่อ WiFi อยู่' }],
+			outputs: [
+				{ id: 'connected', type: 'output', label: 'Connected', dataType: 'void', description: 'ถ้าเชื่อมต่อ WiFi อยู่' },
+				{ id: 'disconnect', type: 'output', label: 'Disconnect', dataType: 'void', description: 'ถ้าหยุดเชื่อมต่อ WiFi แล้ว' }
+			],
 			toCode({ pad, block, safeId, registerPreprocessor }) {
 				registerPreprocessor('#include <WiFi.h>');
 				const id = safeId(block.id);
 				return {
 					parts: [
-						[`${pad}bool ${id} = (WiFi.status() == WL_CONNECTED);`],
-						{ portId: 'connected', depthDelta: 0 }
+						[`${pad}if (WiFi.status() == WL_CONNECTED) {`],
+						{ portId: 'connected', depthDelta: 1 },
+						[`${pad}} else {`],
+						{ portId: 'disconnect', depthDelta: 1 },
+						[`${pad}}`]
 					]
 				};
 			}
