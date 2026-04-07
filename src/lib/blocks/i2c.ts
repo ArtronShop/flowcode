@@ -166,5 +166,170 @@ export const i2cCategory: BlockCategory = {
 				};
 			}
 		},
+		{
+			id: 'i2c_write_bytes',
+			name: 'I2C Write Bytes',
+			color: '#0ea5e9',
+			icon: '📦',
+			category: 'i2c',
+			description: 'เขียนหลาย byte ไปยัง I2C bus ในคราวเดียว โดยระบุค่า HEX แต่ละ byte คั่นด้วยช่องว่าง เช่น "00 1A FF"',
+			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
+			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไป' }],
+			params: [
+				{
+					id: 'bytes',
+					type: 'text',
+					label: 'Bytes (HEX, space-separated)',
+					default: '00 1A FF',
+					description: 'ค่า HEX แต่ละ byte คั่นด้วยช่องว่าง เช่น 00 1A FF'
+				},
+			],
+			toCode({ pad, block, safeId, params, registerPreprocessor }) {
+				registerPreprocessor('#include <Wire.h>');
+				const id = safeId(block.id);
+				const raw = (params.bytes ?? '00').trim();
+				// Parse each token as hex byte, filter invalid ones
+				const tokens = raw.split(/\s+/).filter((t) => /^[0-9a-fA-F]{1,2}$/.test(t));
+				const byteList = tokens.map((t) => `0x${t.toUpperCase().padStart(2, '0')}`).join(', ');
+				const len = tokens.length || 1;
+				return {
+					parts: [
+						[
+							`${pad}{ byte _buf_${id}[${len}] = {${byteList}};`,
+							`${pad}  Wire.write(_buf_${id}, ${len}); }`,
+						],
+						{ portId: 'out', depthDelta: 0 }
+					]
+				};
+			}
+		},
+		{
+			id: 'i2c_mem_write',
+			name: 'I2C Mem Write',
+			color: '#0ea5e9',
+			icon: '📝',
+			category: 'i2c',
+			description: 'เขียนข้อมูลไปยัง register address ภายใน I2C device (beginTransmission → write reg → write data → endTransmission)',
+			inputs: [
+				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+				{ id: 'value', type: 'input', label: 'Value', dataType: 'int', description: 'ค่าที่ต้องการเขียน' },
+			],
+			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไป' }],
+			params: [
+				{ id: 'address', type: 'number', label: 'Device Addr (hex)', default: '0x68', description: 'I2C address ของ device' },
+				{ id: 'reg', type: 'number', label: 'Register (hex)', default: '0x00', description: 'register address ภายใน device' },
+				{ id: 'value', type: 'number', label: 'Value (dec)', default: '0', description: 'ค่าที่จะเขียน (ใช้เมื่อไม่มีบล็อกต่อเข้ามา)' },
+				{
+					id: 'size', type: 'option', label: 'Size',
+					options: [
+						{ label: 'Byte (1 byte)', value: 'byte' },
+						{ label: 'Word (2 bytes)', value: 'word' },
+					],
+					description: 'ขนาดข้อมูลที่จะเขียน'
+				},
+				{
+					id: 'endian', type: 'option', label: 'Endian',
+					options: [
+						{ label: 'Big-endian (BE)', value: 'BE' },
+						{ label: 'Little-endian (LE).', value: 'LE' },
+					],
+					description: 'ลำดับไบต์ Big-endian / Little-endian'
+				},
+			],
+			toCode({ pad, params, resolveInput, registerPreprocessor }) {
+				registerPreprocessor('#include <Wire.h>');
+				const addr = params.address ?? '0x68';
+				const reg = params.reg ?? '0x00';
+				const size = params.size ?? 'byte';
+				const endian = params.endian ?? 'BE';
+				const value = resolveInput('value') ?? params.value ?? '0';
+				const lines: string[] = [
+					`${pad}Wire.beginTransmission(${addr});`,
+					`${pad}Wire.write(${reg});`,
+				];
+				if (size === 'word') {
+					if (endian === 'BE') {
+						lines.push(`${pad}Wire.write((uint8_t)((${value}) >> 8));`);
+						lines.push(`${pad}Wire.write((uint8_t)((${value}) & 0xFF));`);
+					} else {
+						lines.push(`${pad}Wire.write((uint8_t)((${value}) & 0xFF));`);
+						lines.push(`${pad}Wire.write((uint8_t)((${value}) >> 8));`);
+					}
+				} else {
+					lines.push(`${pad}Wire.write((uint8_t)(${value}));`);
+				}
+				lines.push(`${pad}Wire.endTransmission();`);
+				return {
+					parts: [
+						lines,
+						{ portId: 'out', depthDelta: 0 }
+					]
+				};
+			}
+		},
+		{
+			id: 'i2c_mem_read',
+			name: 'I2C Mem Read',
+			color: '#0ea5e9',
+			icon: '📖',
+			category: 'i2c',
+			description: 'อ่านข้อมูลจาก register address ภายใน I2C device (beginTransmission → write reg → endTransmission → requestFrom → read)',
+			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
+			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'int', description: 'ค่าที่อ่านได้ (byte = 0–255, word = 0–65535)' }],
+			params: [
+				{ id: 'address', type: 'number', label: 'Device Addr (hex)', default: '0x68', description: 'I2C address ของ device' },
+				{ id: 'reg', type: 'number', label: 'Register (hex)', default: '0x00', description: 'register address ภายใน device' },
+				{
+					id: 'size', type: 'option', label: 'Size',
+					options: [
+						{ label: 'Byte (1 byte)', value: 'byte' },
+						{ label: 'Word (2 bytes)', value: 'word' },
+					],
+					description: 'ขนาดข้อมูลที่จะอ่าน'
+				},
+				{
+					id: 'endian', type: 'option', label: 'Endian',
+					options: [
+						{ label: 'Big-endian (BE)', value: 'BE' },
+						{ label: 'Little-endian (LE).', value: 'LE' },
+					],
+					description: 'ลำดับไบต์ Big-endian / Little-endian'
+				},
+			],
+			toCode({ pad, block, safeId, params, registerPreprocessor }) {
+				registerPreprocessor('#include <Wire.h>');
+				const id = safeId(block.id);
+				const addr = params.address ?? '0x68';
+				const reg = params.reg ?? '0x00';
+				const size = params.size ?? 'byte';
+				const endian = params.endian ?? 'BE';
+				const lines: string[] = [
+					`${pad}Wire.beginTransmission(${addr});`,
+					`${pad}Wire.write(${reg});`,
+					`${pad}Wire.endTransmission(false);`,
+					`${pad}Wire.requestFrom(${addr}, (uint8_t)${size === 'word' ? '2' : '1'});`,
+				];
+				if (size === 'word') {
+					lines.push(`${pad}int ${id} = 0;`);
+					lines.push(`${pad}if (Wire.available() >= 2) {`);
+					lines.push(`${pad}  uint8_t ${id}_hi = Wire.read();`);
+					lines.push(`${pad}  uint8_t ${id}_lo = Wire.read();`);
+					if (endian === 'BE') {
+						lines.push(`${pad}  ${id} = (${id}_hi << 8) | ${id}_lo;`);
+					} else {
+						lines.push(`${pad}  ${id} = (${id}_lo << 8) | ${id}_hi;`);
+					}
+					lines.push(`${pad}}`);
+				} else {
+					lines.push(`${pad}int ${id} = Wire.available() ? Wire.read() : 0;`);
+				}
+				return {
+					parts: [
+						lines,
+						{ portId: 'value', depthDelta: 0 }
+					]
+				};
+			}
+		},
 	]
 };
