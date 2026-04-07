@@ -773,6 +773,18 @@
 													{#if param.description}
 														<p class="mt-0.5 text-[11px] text-gray-500">{param.description}</p>
 													{/if}
+													{#if param.type === 'option'}
+														{#each param.options as item}
+															<ul class="list-disc pl-6 space-y-2 mt-0.5">
+																<li class="mb-0.5 text-gray-500">
+																	{item.label}
+																	{#if item.description}
+																		 — {item.description}
+																	{/if}
+																</li>
+															</ul>
+														{/each}
+													{/if}
 												</li>
 											{/each}
 										</ul>
