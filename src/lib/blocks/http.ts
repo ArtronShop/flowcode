@@ -65,7 +65,9 @@ export const httpCategory: BlockCategory = {
 			icon: '📥',
 			category: 'http',
 			description: 'ส่ง HTTP request คืน response code',
-			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
+			inputs: [
+				// { id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }
+			],
 			outputs: [
 				{ id: 'code', type: 'output', label: 'Code',  dataType: 'int',  description: 'HTTP response code เช่น 200, 404' },
 			],
@@ -78,13 +80,30 @@ export const httpCategory: BlockCategory = {
 					{ label: 'PATCH', value: 'PATCH'},
 					{ label: 'DELETE', value: 'DELETE'}
 				], default: 'GET' },
-				{ id: 'body', type: 'text', label: 'Body', default: '' },
+				{ id: 'body', type: 'text', label: 'Body', default: '', hidden: ({ params }) => params.method === 'GET' },
 			],
-			toCode({ pad, block, safeId, params, registerPreprocessor }) {
+			dynamicPorts({ method }) {
+				if (method === 'GET') {
+					return {
+						inputs: [
+							{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }
+						]
+					};
+				} else {
+					return {
+						inputs: [
+							{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+							{ id: 'body', type: 'input' as const, label: 'Body', dataType: 'String' as const }
+						]
+					};
+				}
+			},
+			toCode({ pad, block, safeId, params, registerPreprocessor, resolveInput }) {
 				registerPreprocessor('#include <HTTPClient.h>');
 				const varname = params.varname ?? 'http';
 				const method = params.method ?? 'GET';
-				const body = params.body ?? '';
+				const escapedBody = (params.body ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+				const body = resolveInput('body') ?? `"${escapedBody}"`;
 				const id = safeId(block.id);
 				return {
 					parts: [
