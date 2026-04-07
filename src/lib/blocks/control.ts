@@ -92,7 +92,7 @@ export const controlCategory: BlockCategory = {
 				{ id: 'body', type: 'output', label: 'Body', dataType: 'void', description: 'โค้ดที่รันซ้ำในแต่ละรอบของลูป' },
 				{ id: 'done', type: 'output', label: 'Done', dataType: 'void', description: 'โค้ดหลังออกจากลูป (ไม่สามารถเข้าถึงได้ในลูปนี้)' }
 			],
-			toCode({ pad, resolveInput }) {
+			toCode({ pad }) {
 				return {
 					parts: [
 						[`${pad}while (1) {`],
@@ -110,16 +110,19 @@ export const controlCategory: BlockCategory = {
 			icon: '↻',
 			category: 'logic',
 			description: 'วนลูปตามจำนวนครั้งที่กำหนด (for loop) ใช้ตัวแปร i นับรอบ',
-			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
+			inputs: [
+				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+				{ id: 'count', type: 'input', label: 'Count', dataType: 'int', description: 'จำนวนรอบ (ตัวเลือก)' }
+			],
 			outputs: [
 				{ id: 'body', type: 'output', label: 'Body', dataType: 'void', description: 'โค้ดที่รันในแต่ละรอบ (มีตัวแปร i ให้ใช้)' },
 				{ id: 'done', type: 'output', label: 'Done', dataType: 'void', description: 'โค้ดที่รันหลังวนครบทุกรอบ' }
 			],
 			params: [
-				{ id: 'count', type: 'number', label: 'Loop count', default: '10' }
+				{ id: 'count', type: 'number', label: 'Loop count', default: '10', description: 'จำนวนรอบ' }
 			],
-			toCode({ pad, params }) {
-				const count = params.count ?? '10';
+			toCode({ pad, resolveInput, params }) {
+				const count = resolveInput('count') ?? params.count ?? '10';
 				return {
 					parts: [
 						[`${pad}for (int i=0;i<${count};i++) {`],
@@ -158,7 +161,6 @@ export const controlCategory: BlockCategory = {
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [],
 			toCode({ pad, params }) {
-				const count = params.count ?? '10';
 				return {
 					parts: [
 						[`${pad}continue;`],
@@ -169,38 +171,6 @@ export const controlCategory: BlockCategory = {
 		{
 			id: 'switch',
 			name: 'Switch',
-			color: '#e879f9',
-			icon: '⇌',
-			category: 'logic',
-			description: 'แยกทิศทางการทำงานตามค่าตัวเลข (switch/case) รองรับ 2 case และ default',
-			inputs: [{ id: 'in', type: 'input', label: 'Value', dataType: 'int', description: 'ค่าตัวเลขที่ใช้ตรวจสอบในแต่ละ case' }],
-			outputs: [
-				{ id: 'case1', type: 'output', label: 'Case 1', dataType: 'void', description: 'รันเมื่อค่าเท่ากับ 1' },
-				{ id: 'case2', type: 'output', label: 'Case 2', dataType: 'void', description: 'รันเมื่อค่าเท่ากับ 2' },
-				{ id: 'default', type: 'output', label: 'Default', dataType: 'void', description: 'รันเมื่อค่าไม่ตรงกับ case ใดเลย' }
-			],
-			toCode({ pad, resolveInput }) {
-				let val = resolveInput('in') ?? '-1'
-				return {
-					parts: [
-						[`${pad}switch (${val}) {`],
-						[`${pad}    case 1:`],
-						{ portId: 'case1', depthDelta: 2 },
-						[`${pad}        break;`],
-						[`${pad}    case 2:`],
-						{ portId: 'case2', depthDelta: 2 },
-						[`${pad}        break;`],
-						[`${pad}    default:`],
-						{ portId: 'default', depthDelta: 2 },
-						[`${pad}        break;`],
-						[`${pad}}`]
-					]
-				};
-			}
-		},
-		{
-			id: 'switch_n',
-			name: 'Switch 2',
 			color: '#e879f9',
 			icon: '⇌',
 			category: 'logic',
