@@ -163,7 +163,14 @@ export type ParamNumber = PramBase & {
 	validation?: (n: number) => number;
 };
 
-export type ParamDef = ParamOption | ParamText | ParamNumber;
+/** param ที่เลือก variable name จากฐานข้อมูล varname registry */
+export type ParamVarname = PramBase & {
+	type: 'varname';
+	/** กลุ่มของ varname เช่น 'http', 'tcp', 'udp', 'file' */
+	category: string;
+};
+
+export type ParamDef = ParamOption | ParamText | ParamNumber | ParamVarname;
 
 /** helper: คืนค่า default ของ param */
 export function paramDefault(p: ParamDef): string {

@@ -13,7 +13,7 @@ export const udpCategory: BlockCategory = {
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไป' }],
 			params: [
-				{ id: 'varname', type: 'text',   label: 'Variable name', default: 'udp',  description: 'ชื่อตัวแปร WiFiUDP' },
+				{ id: 'varname', type: 'varname', category: 'udp', label: 'Client', default: 'udp', description: 'ชื่อตัวแปร WiFiUDP' },
 				{ id: 'port',    type: 'number', label: 'Local Port',    default: '1234', description: 'port ที่ต้องการรับ UDP' },
 			],
 			toCode({ pad, params, registerPreprocessor, registerGlobal }) {
@@ -39,7 +39,7 @@ export const udpCategory: BlockCategory = {
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [{ id: 'size', type: 'output', label: 'Size', dataType: 'int', description: 'ขนาด packet ที่รับได้ (0 = ไม่มีข้อมูล)' }],
 			params: [
-				{ id: 'varname', type: 'text', label: 'Variable name', default: 'udp' },
+				{ id: 'varname', type: 'varname', category: 'udp', label: 'Client', default: 'udp' },
 			],
 			toCode({ pad, block, safeId, params }) {
 				const varname = params.varname ?? 'udp';
@@ -62,7 +62,7 @@ export const udpCategory: BlockCategory = {
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [{ id: 'data', type: 'output', label: 'Data', dataType: 'String', description: 'ข้อมูลที่รับได้จาก UDP packet' }],
 			params: [
-				{ id: 'varname', type: 'text',   label: 'Variable name', default: 'udp' },
+				{ id: 'varname', type: 'varname', category: 'udp', label: 'Client', default: 'udp' },
 				{ id: 'size',    type: 'number', label: 'Buffer size',   default: '256', description: 'ขนาด buffer สำหรับรับข้อมูล' },
 			],
 			toCode({ pad, block, safeId, params }) {
@@ -92,7 +92,7 @@ export const udpCategory: BlockCategory = {
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [{ id: 'ip', type: 'output', label: 'IP', dataType: 'String', description: 'IP address ของผู้ส่ง' }],
 			params: [
-				{ id: 'varname', type: 'text', label: 'Variable name', default: 'udp' },
+				{ id: 'varname', type: 'varname', category: 'udp', label: 'Client', default: 'udp' },
 			],
 			toCode({ pad, block, safeId, params }) {
 				const varname = params.varname ?? 'udp';
@@ -118,7 +118,7 @@ export const udpCategory: BlockCategory = {
 			],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไป' }],
 			params: [
-				{ id: 'varname', type: 'text',   label: 'Variable name', default: 'udp' },
+				{ id: 'varname', type: 'varname', category: 'udp', label: 'Client', default: 'udp' },
 				{ id: 'host',    type: 'text',   label: 'Host / IP',     default: '192.168.1.255', description: 'ปลายทาง (ใช้เมื่อไม่มีบล็อกต่อเข้ามา)' },
 				{ id: 'port',    type: 'number', label: 'Port',          default: '1234' },
 			],
@@ -147,7 +147,7 @@ export const udpCategory: BlockCategory = {
 			],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไป' }],
 			params: [
-				{ id: 'varname', type: 'text', label: 'Variable name', default: 'udp' },
+				{ id: 'varname', type: 'varname', category: 'udp', label: 'Client', default: 'udp' },
 				{ id: 'data',    type: 'text', label: 'Data',          default: '',   description: 'ข้อมูล (ใช้เมื่อไม่มีบล็อกต่อเข้ามา)' },
 			],
 			toCode({ pad, params, resolveInput }) {
@@ -171,7 +171,7 @@ export const udpCategory: BlockCategory = {
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไป' }],
 			params: [
-				{ id: 'varname', type: 'text', label: 'Variable name', default: 'udp' },
+				{ id: 'varname', type: 'varname', category: 'udp', label: 'Client', default: 'udp' },
 			],
 			toCode({ pad, params }) {
 				const varname = params.varname ?? 'udp';

@@ -19,7 +19,7 @@ export const tcpCategory: BlockCategory = {
 				{ id: 'error', type: 'output', label: 'Error', dataType: 'void', description: 'หากเชื่อมต่อไม่สำเร็จ' },
 			],
 			params: [
-				{ id: 'varname', type: 'text', label: 'Variable name', default: 'tcpClient', description: 'ชื่อตัวแปร WiFiClient' },
+				{ id: 'varname', type: 'varname', category: 'tcp', label: 'Client', default: 'tcpClient', description: 'ชื่อตัวแปร WiFiClient' },
 				{ id: 'host', type: 'text', label: 'Host / IP', default: '192.168.1.1', description: 'Server address (ใช้เมื่อไม่มีบล็อกต่อเข้ามา)' },
 				{ id: 'port', type: 'number', label: 'Port', default: '80' },
 			],
@@ -54,7 +54,7 @@ export const tcpCategory: BlockCategory = {
 				{ id: 'disconnect', type: 'output', label: 'Disconnect', dataType: 'void', description: 'ถ้าเลิกเชื่อมต่อแล้ว' }
 			],
 			params: [
-				{ id: 'varname', type: 'text', label: 'Variable name', default: 'tcpClient' },
+				{ id: 'varname', type: 'varname', category: 'tcp', label: 'Client', default: 'tcpClient' },
 			],
 			toCode({ pad, block, safeId, params }) {
 				const varname = params.varname ?? 'tcpClient';
@@ -83,7 +83,7 @@ export const tcpCategory: BlockCategory = {
 			],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไป' }],
 			params: [
-				{ id: 'varname', type: 'text', label: 'Variable name', default: 'tcpClient' },
+				{ id: 'varname', type: 'varname', category: 'tcp', label: 'Client', default: 'tcpClient' },
 				{ id: 'data', type: 'text', label: 'Data', default: '', description: 'ข้อมูล (ใช้เมื่อไม่มีบล็อกต่อเข้ามา)' },
 				{
 					id: 'newline', type: 'option', label: 'New line',
@@ -113,7 +113,7 @@ export const tcpCategory: BlockCategory = {
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [{ id: 'count', type: 'output', label: 'Count', dataType: 'int', description: 'จำนวน byte ที่พร้อมอ่าน' }],
 			params: [
-				{ id: 'varname', type: 'text', label: 'Variable name', default: 'tcpClient' },
+				{ id: 'varname', type: 'varname', category: 'tcp', label: 'Client', default: 'tcpClient' },
 			],
 			toCode({ pad, block, safeId, params }) {
 				const varname = params.varname ?? 'tcpClient';
@@ -136,7 +136,7 @@ export const tcpCategory: BlockCategory = {
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [{ id: 'data', type: 'output', label: 'Data', dataType: 'String', description: 'ข้อมูลที่รับได้จาก TCP' }],
 			params: [
-				{ id: 'varname', type: 'text', label: 'Variable name', default: 'tcpClient' },
+				{ id: 'varname', type: 'varname', category: 'tcp', label: 'Client', default: 'tcpClient' },
 			],
 			toCode({ pad, block, safeId, params }) {
 				const varname = params.varname ?? 'tcpClient';
@@ -159,7 +159,7 @@ export const tcpCategory: BlockCategory = {
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [{ id: 'data', type: 'output', label: 'Data', dataType: 'String', description: 'ข้อมูลที่อ่านได้' }],
 			params: [
-				{ id: 'varname', type: 'text', label: 'Variable name', default: 'tcpClient' },
+				{ id: 'varname', type: 'varname', category: 'tcp', label: 'Client', default: 'tcpClient' },
 				{ id: 'terminator', type: 'text', label: 'Terminator', default: '\\n', description: 'อักขระหยุดอ่าน เช่น \\n' },
 			],
 			toCode({ pad, block, safeId, params }) {
@@ -184,7 +184,7 @@ export const tcpCategory: BlockCategory = {
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไป' }],
 			params: [
-				{ id: 'varname', type: 'text', label: 'Variable name', default: 'tcpClient' },
+				{ id: 'varname', type: 'varname', category: 'tcp', label: 'Client', default: 'tcpClient' },
 			],
 			toCode({ pad, params }) {
 				const varname = params.varname ?? 'tcpClient';

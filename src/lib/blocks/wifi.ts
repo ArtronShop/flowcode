@@ -13,12 +13,12 @@ export const wifiCategory: BlockCategory = {
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไป' }],
 			params: [
-				{ id: 'ssid',     type: 'text', label: 'SSID',     default: 'MyWiFi',   description: 'ชื่อเครือข่าย WiFi' },
+				{ id: 'ssid', type: 'text', label: 'SSID', default: 'MyWiFi', description: 'ชื่อเครือข่าย WiFi' },
 				{ id: 'password', type: 'text', label: 'Password', default: 'mypassword', description: 'รหัสผ่าน WiFi' },
 			],
 			toCode({ pad, params, registerPreprocessor }) {
 				registerPreprocessor('#include <WiFi.h>');
-				const ssid     = (params.ssid     ?? 'MyWiFi').replaceAll('"', '\\"');
+				const ssid = (params.ssid ?? 'MyWiFi').replaceAll('"', '\\"');
 				const password = (params.password ?? '').replaceAll('"', '\\"');
 				return {
 					parts: [
@@ -145,8 +145,8 @@ export const wifiCategory: BlockCategory = {
 					options: [
 						{ label: 'Station (STA)', value: 'WIFI_STA' },
 						{ label: 'Access Point (AP)', value: 'WIFI_AP' },
-						{ label: 'AP + Station',      value: 'WIFI_AP_STA' },
-						{ label: 'Off',               value: 'WIFI_OFF' },
+						{ label: 'AP + Station', value: 'WIFI_AP_STA' },
+						{ label: 'Off', value: 'WIFI_OFF' },
 					],
 					description: 'โหมด WiFi'
 				},
@@ -158,6 +158,48 @@ export const wifiCategory: BlockCategory = {
 					parts: [
 						[`${pad}WiFi.mode(${mode});`],
 						{ portId: 'out', depthDelta: 0 }
+					]
+				};
+			}
+		},
+		{
+			id: 'wifi_event',
+			name: 'WiFi Event',
+			trigger: true,
+			color: '#06b6d4',
+			icon: '📶',
+			category: 'wifi',
+			description: 'กำหนดบล็อกที่ต้องการให้ทำงานเมื่อเกิดเหตุการณ์เกี่ยวกับ WiFi',
+			inputs: [],
+			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'บล็อกที่ต้องการให้ทำงานเมื่อเกิดเหตุการณ์' }],
+			params: [
+				{
+					id: 'event', type: 'option', label: 'Event',
+					options: [
+						{ label: 'WiFi STA Start', value: 'ARDUINO_EVENT_WIFI_STA_START' },
+						{ label: 'WiFi STA Connected', value: 'ARDUINO_EVENT_WIFI_STA_CONNECTED' },
+						{ label: 'WiFi STA Got IP', value: 'ARDUINO_EVENT_WIFI_STA_GOT_IP' },
+						{ label: 'WiFi STA Disconnect', value: 'ARDUINO_EVENT_WIFI_STA_DISCONNECTED ' },
+						{ label: 'WiFi STA Lost IP', value: 'ARDUINO_EVENT_WIFI_STA_LOST_IP' },
+
+					],
+					description: 'เหตุการณ์ที่ต้องการตรวจจับ'
+				},
+			],
+			toCode({ block, safeId, captureCode, pad, params, registerPreprocessor, registerFunction }) {
+				registerPreprocessor('#include <WiFi.h>');
+				const id = safeId(block.id);
+				const fn = `wifi_event_${id}`;
+				const body = captureCode('out', 1);
+				const event = params.event ?? 'ARDUINO_EVENT_WIFI_STA_START';
+				registerFunction(
+					`void ${fn}(WiFiEvent_t event, WiFiEventInfo_t info)`,
+					body,
+					`void ${fn}(WiFiEvent_t event, WiFiEventInfo_t info);`
+				);
+				return {
+					parts: [
+						[`${pad}WiFi.onEvent(${fn}, WiFiEvent_t::${event});`]
 					]
 				};
 			}
