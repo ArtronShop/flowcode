@@ -602,7 +602,7 @@
 			<a
 				href="https://docs.google.com/forms/d/e/1FAIpQLSfu1sHKHX_ruOAXCKWQR37l-YmX-y-oQ-2iNadISVHftOnseQ/viewform?usp=publish-editor"
 				target="_blank"
-				class="flex h-9 w-9 items-center justify-center rounded-lg transition-colorstext-gray-500 hover:bg-gray-700 hover:text-white"
+				class="flex h-9 w-9 items-center justify-center rounded-lg transition-colors text-gray-500 hover:bg-gray-700 hover:text-white"
 				title="รายงานปัญหา"
 			>
 				<MessageCircle size={18} />
