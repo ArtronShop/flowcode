@@ -54,10 +54,12 @@
 	// ─── Varname registry ────────────────────────────────────────────
 	// category → string[] เช่น { http: ['http', 'http2'], tcp: ['client'] }
 	let varnameRegistry = $state<Record<string, string[]>>({
-		http: ['http'],
-		tcp: ['tcpClient'],
-		udp: ['udp'],
-		file: ['myFile'],
+		http:      ['http'],
+		tcp:       ['tcpClient'],
+		udp:       ['udp'],
+		file:      ['myFile'],
+		webserver: ['server'],
+		mqtt:      ['mqttClient'],
 	});
 
 	function getVarnameOptions(category: string) {
@@ -795,7 +797,7 @@
 									{#if !pHidden}
 										{@const pVal = block.params?.[pDef.id] ?? paramDefault(pDef)}
 										{#if pDef.label}
-											<span class="text-[9px] text-gray-500 leading-tight">{pDef.label}</span>
+											<span class="text-[9px] text-gray-500 leading-tight text-ellipsis text-nowrap overflow-hidden">{pDef.label}</span>
 										{/if}
 										{#if pDef.type === 'varname'}
 											<Dropdown
