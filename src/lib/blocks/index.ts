@@ -12,6 +12,8 @@ import { wifiCategory } from './wifi.js';
 import { httpCategory } from './http.js';
 import { udpCategory } from './udp.js';
 import { tcpCategory } from './tcp.js';
+import { webserverCategory } from './webserver.js';
+import { espnowCategory } from './espnow.js';
 
 export const blockCategories = [
 	triggerCategory,
@@ -28,4 +30,6 @@ export const blockCategories = [
 	httpCategory,
 	udpCategory,
 	tcpCategory,
+	webserverCategory,
+	espnowCategory,
 ];
