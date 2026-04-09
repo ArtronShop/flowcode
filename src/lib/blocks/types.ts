@@ -146,31 +146,33 @@ export type CodeGenContext = {
 	resolveInput: (portId: string) => string | null;
 };
 
-type PramBase = {
+type HiddenFn = (args: { params: Record<string, string> }) => boolean;
+
+type ParamBase = {
 	id: string;
 	label?: string;
 	description?: string;
 	default?: string;
-	hidden?: (ctx: { params: Record<string, string>; }) => boolean | boolean;
+	hidden?: boolean | HiddenFn;
 };
 
-export type ParamOption = PramBase & {
+export type ParamOption = ParamBase & {
 	type: 'option';
 	options: { label: string; value: string; description?: string; }[];
 };
 
-export type ParamText = PramBase & {
+export type ParamText = ParamBase & {
 	type: 'text';
 	validation?: (text: string) => string;
 };
 
-export type ParamNumber = PramBase & {
+export type ParamNumber = ParamBase & {
 	type: 'number';
 	validation?: (n: number) => number;
 };
 
 /** param ที่เลือก variable name จากฐานข้อมูล varname registry */
-export type ParamVarname = PramBase & {
+export type ParamVarname = ParamBase & {
 	type: 'varname';
 	/** กลุ่มของ varname เช่น 'http', 'tcp', 'udp', 'file' */
 	category: string;

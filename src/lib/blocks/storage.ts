@@ -26,8 +26,9 @@ export const storageCategory: BlockCategory = {
 			description: 'เริ่มต้น Filesystem (LittleFS / SPIFFS) — ควรเรียกใน setup()',
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
 			outputs: [
-				{ id: 'ok', type: 'output', label: 'OK', dataType: 'void', description: 'ถ้าเริ่มต้นสำเร็จ' },
+				{ id: 'ok',    type: 'output', label: 'OK',    dataType: 'void', description: 'ถ้าเริ่มต้นสำเร็จ' },
 				{ id: 'error', type: 'output', label: 'Error', dataType: 'void', description: 'ถ้าไม่สำเร็จ' },
+				{ id: 'out',   type: 'output', label: '➜',     dataType: 'void', description: 'ส่งต่อเสมอหลัง if/else' },
 			],
 			params: [
 				{ id: 'fs', type: 'option', label: 'Filesystem', options: FS_OPTIONS, description: 'ชนิด filesystem' },
@@ -45,6 +46,7 @@ export const storageCategory: BlockCategory = {
 						[`${pad}} else {`],
 						{ portId: 'error', depthDelta: 1 },
 						[`${pad}}`],
+						{ portId: 'out', depthDelta: 0 },
 					]
 				};
 			}

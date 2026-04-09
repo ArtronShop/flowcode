@@ -15,8 +15,9 @@ export const tcpCategory: BlockCategory = {
 				{ id: 'host', type: 'input', label: 'Host', dataType: 'String', description: 'IP address หรือ hostname ของ server' },
 			],
 			outputs: [
-				{ id: 'ok', type: 'output', label: 'OK', dataType: 'void', description: 'หากเชื่อมต่อสำเร็จ' },
+				{ id: 'ok',    type: 'output', label: 'OK',    dataType: 'void', description: 'หากเชื่อมต่อสำเร็จ' },
 				{ id: 'error', type: 'output', label: 'Error', dataType: 'void', description: 'หากเชื่อมต่อไม่สำเร็จ' },
+				{ id: 'out',   type: 'output', label: '➜',     dataType: 'void', description: 'ส่งต่อเสมอหลัง if/else' },
 			],
 			params: [
 				{ id: 'varname', type: 'varname', category: 'tcp', label: 'Client', default: 'tcpClient', description: 'ชื่อตัวแปร WiFiClient' },
@@ -37,6 +38,7 @@ export const tcpCategory: BlockCategory = {
 						[`${pad}} else {`],
 						{ portId: 'error', depthDelta: 1 },
 						[`${pad}}`],
+						{ portId: 'out', depthDelta: 0 },
 					]
 				};
 			}
