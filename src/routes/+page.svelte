@@ -14,10 +14,12 @@
 		ArrowLeft, X, Download, Trash2, CircleCheck,
 		Cpu, Usb, Wifi, WifiOff, ChevronsDown, LoaderCircle, CircleStop,
         ChevronRight,
+        MessageCircle,
 	} from 'lucide-svelte';
 
 	import type { ExtensionProps } from '$lib/blocks/extension/types';
 	import extensionIndex from '$lib/blocks/extension';
+	import { ansiToHtml } from '$lib/utils/ansiToHtml';
 
 	type ExtensionItem = ExtensionProps & {
 		installed: boolean;
@@ -232,7 +234,7 @@
 		runLogs = [];
 		// activeConsoleTab = 'run';
 
-		const log = (msg: string) => { runLogs = [...runLogs, msg]; };
+		const log = (msg: string) => { runLogs = [...runLogs, msg + '\n']; };
 
 		const sketchName = 'flowcode_project';
 		const code = editor?.generateCode() || '';
@@ -597,6 +599,14 @@
 			>
 				<CircleQuestionMark size={18} />
 			</button>
+			<a
+				href="https://docs.google.com/forms/d/e/1FAIpQLSfu1sHKHX_ruOAXCKWQR37l-YmX-y-oQ-2iNadISVHftOnseQ/viewform?usp=publish-editor"
+				target="_blank"
+				class="flex h-9 w-9 items-center justify-center rounded-lg transition-colorstext-gray-500 hover:bg-gray-700 hover:text-white"
+				title="รายงานปัญหา"
+			>
+				<MessageCircle size={18} />
+			</a>
 		</nav>
 
 		<!-- ── Side panel ──────────────────────────────────────────── -->
@@ -944,7 +954,7 @@
 								<span>กด <span class="text-gray-400">รัน</span> เพื่อเริ่มการ compile และ upload</span>
 							</div>
 						{:else}
-							<pre bind:this={runLogEl} class="min-h-0 flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-gray-300">{runLogs.join('\n')}</pre>
+							<pre bind:this={runLogEl} class="min-h-0 flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-gray-300">{@html ansiToHtml(runLogs.join(''))}</pre>
 						{/if}
 					{:else if activeConsoleTab === 'serial'}
 						<!-- Serial toolbar -->
