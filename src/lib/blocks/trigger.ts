@@ -41,12 +41,6 @@ export const triggerCategory: BlockCategory = {
 			inputs: [],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'สายลำดับการทำงานที่รันซ้ำในแต่ละรอบเวลา' }],
 			params: [
-				/*{
-					id: 'interval',
-					type: 'number',
-					default: '1000',
-					validation: (n) => Math.max(1, Math.trunc(n))
-				}*/
 				{
 					id: 'interval',
 					type: 'option',
@@ -54,6 +48,7 @@ export const triggerCategory: BlockCategory = {
 						{ label: "every 0.1 second", value: "100" },
 						{ label: "every 0.5 seconds", value: "500" },
 						{ label: "every 1 second", value: "1 * 1000" },
+						{ label: "every 2 second", value: "2 * 1000" },
 						{ label: "every 5 seconds", value: "5 * 1000" },
 						{ label: "every 10 seconds", value: "10 * 1000" },
 						{ label: "every 30 seconds", value: "30 * 1000" },
@@ -63,30 +58,37 @@ export const triggerCategory: BlockCategory = {
 						{ label: "every 10 mins", value: "10 * 60 * 1000" },
 						{ label: "every 30 mins", value: "30 * 60 * 1000" },
 						{ label: "every 1 hours", value: "60 * 60 * 1000" },
+						{ label: "Custom", value: "CUSTOM" },
 					],
 					description: 'ช่วงเวลาที่ทำซ้ำ (1 วินาที ถึง 1 ชั่วโมง)'
+				},
+				{
+					id: 'custom',
+					label: 'Interval (ms)',
+					type: 'number',
+					default: '1000',
+					validation: (n) => Math.max(1, Math.trunc(n)),
+					hidden: ({ params }) => params.interval !== 'CUSTOM'
 				}
 			],
-			toCode({ block, params, safeId, captureCode, registerFunction, pad }) {
+			toCode({ block, params, safeId, captureCode, registerPollingCode, pad }) {
 				const id = safeId(block.id);
-				const fn = `task_${id}`;
-				const interval = params.interval ?? '1000';
+				const interval = params.interval === 'CUSTOM' ? (params.custom ?? '1000') : (params.interval ?? '1000');
 				const body = captureCode('out', 1);
-				const taskBody = [
-					`  for (;;) {`,
-					body.split('\n').map(l => `  ${l}`).join('\n'),
-					`    vTaskDelay((${interval}) / portTICK_PERIOD_MS);`,
+
+				registerPollingCode([
+					`{ // Schedule ${interval} ms (${id})`,
+					`  static uint32_t timer = 0;`,
+					`  if ((timer == 0) || ((millis() - timer) >= (${interval})) || (millis() < timer)) {`,
+					`    timer = millis();`,
+					...body.split('\n').map(l => `  ${l}`),
 					`  }`,
-					`  vTaskDelete(NULL);`,
-				].join('\n');
-				registerFunction(
-					`void ${fn}(void* pvParameters)`,
-					taskBody,
-					`void ${fn}(void* pvParameters);`
-				);
+					`}`,
+				].join('\n'))
+
 				return {
 					parts: [
-						[`${pad}xTaskCreate(${fn}, "${fn}", 8192, NULL, 5, NULL);`]
+
 					]
 				};
 			}

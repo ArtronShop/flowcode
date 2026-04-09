@@ -13,12 +13,12 @@
 
 	let { x, y, onaddnote, onduplicate, onhelp, ondelete, onclose }: Props = $props();
 
-	const items = [
+	const items = $derived([
 		{ label: 'เพิ่มโน็ต',  icon: StickyNote, action: onaddnote,  class: '' },
 		{ label: 'ทำซ้ำ',      icon: Copy,       action: onduplicate, class: '' },
 		{ label: 'วิธีใช้',    icon: BookOpen,   action: onhelp,      class: '' },
 		{ label: 'ลบ',         icon: Trash2,     action: ondelete,    class: 'text-red-400 hover:text-red-300' },
-	];
+	]);
 
 	function pick(action?: () => void) {
 		action?.();
