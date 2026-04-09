@@ -50,7 +50,7 @@ export const dataCategory: BlockCategory = {
 				{ id: 'value', type: 'text', default: '' }
 			],
 			toExpr(params) {
-				const escaped = (params.value ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+				const escaped = (params.value ?? '').replaceAll('"', '\\"');
 				return `"${escaped}"`;
 			},
 			toCode() { return { parts: [] }; }
