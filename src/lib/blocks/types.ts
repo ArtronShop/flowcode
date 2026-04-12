@@ -48,6 +48,7 @@ export const PORT_TYPE_COLORS: Record<DataType, string> = {
 	double: '#a855f7', // purple
 	String: '#ef4444', // red
 	any:    '#94a3b8', // slate    — generic
+	json:   '#22d3ee', // cyan     — ArduinoJson document/variant
 };
 
 // ─── Canvas / Connection types ───────────────────────────────────────────────
@@ -87,11 +88,19 @@ export type Connection = {
 // ─── Code generation types ───────────────────────────────────────────────────
 
 /** อ้างอิง output port ที่ต้องการให้ traverse ต่อ */
-export type ChildRef = {
-	portId: string;
-	/** ความลึกสัมพัทธ์เทียบกับบล็อกปัจจุบัน (+1 = เยื้องเข้า, 0 = ระดับเดิม) */
-	depthDelta: number;
-};
+export type ChildRef =
+	| {
+		portId: string;
+		/** ความลึกสัมพัทธ์เทียบกับบล็อกปัจจุบัน (+1 = เยื้องเข้า, 0 = ระดับเดิม) */
+		depthDelta: number;
+	}
+	| {
+		/**
+		 * traverse blocks ที่ต่อเข้า INPUT port นี้ของบล็อกปัจจุบัน ก่อนดำเนินการต่อ
+		 * ใช้สำหรับ "Wait All" block — รับรองว่าทุก branch ทำงานก่อน output
+		 */
+		waitPortId: string;
+	};
 
 /**
  * ผลลัพธ์จาก toCode() — สลับระหว่างบรรทัดโค้ดกับจุดที่ต้อง traverse ต่อ

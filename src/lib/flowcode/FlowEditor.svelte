@@ -60,6 +60,8 @@
 		file:      ['myFile'],
 		webserver: ['server'],
 		mqtt:      ['mqttClient'],
+		json:      ['doc'],
+		modbus:    ['modbus'],
 	});
 
 	function getVarnameOptions(category: string) {
@@ -311,7 +313,7 @@
 				canvasBlocks = canvasBlocks.map((b) => {
 					const off = multiDragOffsets!.get(b.id);
 					if (!off) return b;
-					return { ...b, x: snap(Math.max(0, cc.x - off.ox)), y: snap(Math.max(0, cc.y - off.oy)) };
+					return { ...b, x: snap(cc.x - off.ox), y: snap(cc.y - off.oy) };
 				});
 			} else {
 				canvasBlocks = canvasBlocks.map((b) =>
@@ -483,6 +485,11 @@
 		selectedConnIds = new Set(connections.map((c) => c.id));
 		selectedBlockId = null;
 		selectedConnId = null;
+	}
+
+	// ─── Public keyboard handler (เรียกจาก parent) ───────────────────
+	export function handleExternalKeyDown(e: KeyboardEvent) {
+		handleKeyDown(e);
 	}
 
 	// ─── Port interaction ────────────────────────────────────────────
@@ -713,7 +720,6 @@
 </script>
 
 <svelte:window
-	onkeydown={handleKeyDown}
 	onmousemove={handleWindowMouseMove}
 	onmouseup={handleWindowMouseUp}
 />

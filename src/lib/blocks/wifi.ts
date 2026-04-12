@@ -24,6 +24,10 @@ export const wifiCategory: BlockCategory = {
 					{ label: 'No', value: 'N' },
 				]},
 				{ id: 'timeout_ms', type: 'number', label: 'Max wait time (ms)', default: '30000', validation: (n: number) => Math.max(100, n), description: 'ระยะเวลารอเชื่อมต่อนานสุด', hidden: ({ params }) => params.wait_connected === 'N' },
+				{ id: 'auto_reconect', type: 'option', label: 'Auto Reconnect', options: [
+					{ label: 'Yes', value: 'true' },
+					{ label: 'No', value: 'false' },
+				]},
 			],
 			toCode({ pad, params, registerPreprocessor }) {
 				registerPreprocessor('#include <WiFi.h>');
@@ -31,9 +35,11 @@ export const wifiCategory: BlockCategory = {
 				const password = (params.password ?? '').replaceAll('"', '\\"');
 				const wait_connected = params.wait_connected === 'Y';
 				const timeout = params.timeout_ms ?? '30000';
+				const auto_reconect = params.auto_reconect ?? 'true';
 
 				const allStatement: any[] = [];
 				allStatement.push([`${pad}WiFi.begin("${ssid}", "${password}");`]);
+				allStatement.push([`${pad}WiFi.setAutoReconnect(${auto_reconect});`]);
 				if (wait_connected) {
 					allStatement.push([`${pad}{ // wait WiFi connect with timeout ${timeout} ms`]);
 					allStatement.push([`${pad}  uint32_t timeout = ${timeout};`]);

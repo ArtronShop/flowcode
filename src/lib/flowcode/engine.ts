@@ -168,8 +168,19 @@ export function flowToC(
 		for (const part of result.parts) {
 			if (Array.isArray(part)) {
 				target.push(...part);
+			} else if ('waitPortId' in part) {
+				// Wait-for-input: traverse all blocks connected to this INPUT port first
+				// ใช้ visitedSet ร่วมกัน เพื่อไม่ให้บล็อกที่ถูก traverse ไปแล้วถูกซ้ำ
+				const waitConns = connections.filter(
+					(c) => c.toBlockId === blockId && c.toPortId === part.waitPortId
+				);
+				for (const conn of waitConns) {
+					if (!visitedSet.has(conn.fromBlockId)) {
+						traverseTo(conn.fromBlockId, depth, target, visitedSet);
+					}
+				}
 			} else {
-				const child = part as ChildRef;
+				const child = part;
 				const childConns = connections.filter(
 					(c) => c.fromBlockId === blockId && c.fromPortId === child.portId
 				);

@@ -210,5 +210,37 @@ export const controlCategory: BlockCategory = {
 				};
 			}
 		},
+
+		// ─── Wait All ─────────────────────────────────────────────────────
+		{
+			id: 'wait_all',
+			name: 'Wait All',
+			color: '#64748b',
+			icon: '⏳',
+			category: 'control',
+			description:
+				'รอให้ทุก branch ที่ต่อเข้ามาทำงานก่อน แล้วค่อยดำเนินการต่อ\n' +
+				'ตัวบล็อกเองไม่สร้างโค้ด — รับรองแค่ลำดับการ traverse ว่าทุก Input จะถูกสร้างก่อน Output',
+			inputs: [
+				{ id: 'in',  type: 'input', label: '➜', dataType: 'any', description: 'สาย flow หลัก' },
+				{ id: 'in2', type: 'input', label: '➜', dataType: 'any', description: 'สาย flow เพิ่มเติม 2' },
+				{ id: 'in3', type: 'input', label: '➜', dataType: 'any', description: 'สาย flow เพิ่มเติม 3' },
+				{ id: 'in4', type: 'input', label: '➜', dataType: 'any', description: 'สาย flow เพิ่มเติม 4' },
+			],
+			outputs: [
+				{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ดำเนินการต่อหลังจาก Input ทั้งหมดถูก traverse แล้ว' },
+			],
+			toCode({ pad }) {
+				return {
+					parts: [
+						// traverse ทุก wait input ก่อนดำเนินการต่อ
+						{ waitPortId: 'in2' },
+						{ waitPortId: 'in3' },
+						{ waitPortId: 'in4' },
+						{ portId: 'out', depthDelta: 0 },
+					]
+				};
+			}
+		},
 	]
 };

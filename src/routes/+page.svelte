@@ -419,6 +419,9 @@
 </script>
 
 <svelte:window onkeydown={(e) => {
+	// ส่ง event ให้ FlowEditor จัดการก่อน (Del, Esc, Ctrl+A ฯลฯ)
+	editor?.handleExternalKeyDown(e);
+	// จัดการ project-level shortcuts
 	const active = document.activeElement;
 	const isInput = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
 	if (isInput) return;
