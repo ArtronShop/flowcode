@@ -116,6 +116,7 @@
 	let panY = $state(0);
 	let isPanning = $state(false);
 	let panStart = { x: 0, y: 0 };
+	let didPan = false; // true เมื่อขยับเมาส์ขณะ pan (ไม่ใช่แค่คลิก)
 
 	let canvas: HTMLElement;
 
@@ -297,6 +298,7 @@
 	// ─── Canvas mouse events ─────────────────────────────────────────
 	function handleCanvasMouseMove(e: MouseEvent) {
 		if (isPanning) {
+			didPan = true;
 			panX += e.clientX - panStart.x;
 			panY += e.clientY - panStart.y;
 			panStart = { x: e.clientX, y: e.clientY };
@@ -333,6 +335,7 @@
 		if (t instanceof SVGPathElement || t instanceof SVGCircleElement) return;
 		if (connectingFrom || draggingConnEnd) return;
 		isPanning = true;
+		didPan = false;
 		panStart = { x: e.clientX, y: e.clientY };
 		e.preventDefault();
 	}
@@ -376,6 +379,8 @@
 	}
 
 	function handleCanvasClick() {
+		// ถ้าเพิ่งเลื่อน canvas (pan) ให้ข้ามการ deselect
+		if (didPan) { didPan = false; return; }
 		connectingFrom = null;
 		const hadBlock = selectedBlockId !== null || selectedBlockIds.size > 0;
 		const hadConn = selectedConnId !== null || selectedConnIds.size > 0;
