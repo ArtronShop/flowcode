@@ -62,6 +62,10 @@
 		mqtt:      ['mqttClient'],
 		json:      ['doc'],
 		modbus:    ['modbus'],
+		var_int:    ['myInt'],
+		var_float:  ['myFloat'],
+		var_string: ['myString'],
+		var_bool:   ['myBool'],
 	});
 
 	function getVarnameOptions(category: string) {

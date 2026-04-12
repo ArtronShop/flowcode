@@ -1,5 +1,25 @@
 import type { BlockCategory } from './types.js';
 
+/** คืน array ของ specifier character ตามลำดับ (เช่น ['d', 's', 'f']) ไม่นับ %% */
+function getPrintfSpecifiers(format: string): string[] {
+	const matches = format.match(/%%|%[-+0 #]*(?:\*|\d+)?(?:\.(?:\*|\d+))?(?:hh?|ll?|[ljztL])?[diouxXeEfgGaAcspn]/g) ?? [];
+	return matches.filter(m => m !== '%%').map(m => m[m.length - 1]);
+}
+
+/** แปลง specifier character เป็น Arduino dataType */
+function specifierToDataType(spec: string): string {
+	if ('diouxX'.includes(spec)) return 'int';
+	if ('eEfgGaA'.includes(spec)) return 'float';
+	if (spec === 's') return 'String';
+	if (spec === 'c') return 'char';
+	return 'any';
+}
+
+/** ห่อ arg ด้วย String(...).c_str() เฉพาะ specifier %s เพื่อรองรับ Arduino String */
+function wrapPrintfArgs(args: string[], specs: string[]): string[] {
+	return args.map((a, i) => specs[i] === 's' ? `String(${a}).c_str()` : a);
+}
+
 export const dataCategory: BlockCategory = {
 	name: 'Data',
 	blocks: [
@@ -77,25 +97,6 @@ export const dataCategory: BlockCategory = {
 			toExpr(params) { return params.value === 'false' ? 'false' : 'true'; },
 			toCode() { return { parts: [] }; }
 		},
-		/*
-		{
-			id: 'variable',
-			name: 'Variable',
-			color: '#ec4899',
-			icon: 'x',
-			category: 'data',
-			inputs: [{ id: 'set', type: 'input', label: 'Set', dataType: 'int' }],
-			outputs: [{ id: 'get', type: 'output', label: 'Get', dataType: 'int' }],
-			toCode({ block, pad, safeId, resolveInput }) {
-				let init = resolveInput('set') ?? '0';
-				return {
-					parts: [
-						[`${pad}int ${safeId(block.id)} = ${init};`],
-						{ portId: 'get', depthDelta: 0 }
-					]
-				};
-			}
-		},*/
 		{
 			id: 'math',
 			name: 'Math',
@@ -107,12 +108,14 @@ export const dataCategory: BlockCategory = {
 				{ id: 'b', type: 'input', label: 'B', dataType: 'float' }
 			],
 			outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: 'float' }],
-			params: [{ id: 'operator', label: 'Operator', type: 'option', options: [
-				{ label: '+', value: '+' },
-				{ label: '-', value: '-' },
-				{ label: '×', value: '*' },
-				{ label: '÷', value: '/' },
-			]}],
+			params: [{
+				id: 'operator', label: 'Operator', type: 'option', options: [
+					{ label: '+', value: '+' },
+					{ label: '-', value: '-' },
+					{ label: '×', value: '*' },
+					{ label: '÷', value: '/' },
+				]
+			}],
 			toCode({ block, pad, safeId, resolveInput, params }) {
 				const a = resolveInput('a') ?? '0';
 				const b = resolveInput('b') ?? '0';
@@ -135,11 +138,13 @@ export const dataCategory: BlockCategory = {
 				{ id: 'angle', type: 'input', label: 'Angle', dataType: 'float' },
 			],
 			outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: 'float' }],
-			params: [{ id: 'function', label: 'Function', type: 'option', options: [
-				{ label: 'sin', value: 'sin' },
-				{ label: 'cos', value: 'cos' },
-				{ label: 'tan', value: 'tan' },
-			]}],
+			params: [{
+				id: 'function', label: 'Function', type: 'option', options: [
+					{ label: 'sin', value: 'sin' },
+					{ label: 'cos', value: 'cos' },
+					{ label: 'tan', value: 'tan' },
+				]
+			}],
 			toCode({ block, pad, safeId, resolveInput, params }) {
 				const angle = resolveInput('angle') ?? '0';
 				const fn = params?.function || '';
@@ -216,6 +221,48 @@ export const dataCategory: BlockCategory = {
 				return {
 					parts: [
 						[`${pad}String ${safeId(block.id)} = ${src.map(a => `String(${a})`).join(' + ')};`],
+						{ portId: 'out', depthDelta: 0 }
+					]
+				};
+			}
+		},
+		{
+			id: 'string_format',
+			name: 'String Format',
+			color: '#f97316',
+			icon: '"%',
+			category: 'data',
+			description: 'จัดรูปแบบข้อความตาม format ของ printf ภาษา C เช่น "Temp: %.1f°C, Val: %d" จะแปลงผ่าน C string (char[]) ก่อน แล้วค่อยแปลงเป็น String',
+			inputs: [],
+			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'String' }],
+			params: [
+				{ id: 'format', type: 'text', label: 'Format', default: 'Value=%d', description: 'รูปแบบ printf เช่น "Temp: %.1f" หรือ "Count: %d, Name: %s" (จำนวน input จะปรับตาม specifier อัตโนมัติ)' }
+			],
+			dynamicPorts({ format }) {
+				const specs = getPrintfSpecifiers(format ?? '%d');
+				return {
+					inputs: [
+						{ id: 'inp', type: 'input', label: '➜', dataType: 'void', description: 'สายลำดับการทำงาน' },
+						...specs.map((spec, i) => ({
+							id: `arg${i + 1}`, type: 'input' as const, label: `Arg ${i + 1}`, dataType: specifierToDataType(spec) as import('./types.js').DataType
+						}))
+					]
+				};
+			},
+			toCode({ block, pad, safeId, resolveInput, params }) {
+				const fmt = (params.format ?? '%d').replaceAll('"', '\\"');
+				const specs = getPrintfSpecifiers(fmt);
+				const args = specs.map((_, i) => resolveInput(`arg${i + 1}`) ?? '0');
+				const wrappedArgs = wrapPrintfArgs(args, specs);
+				const id = safeId(block.id);
+				const argsPart = wrappedArgs.length > 0 ? `, ${wrappedArgs.join(', ')}` : '';
+				return {
+					parts: [
+						[
+							`${pad}char ${id}_buf[256];`,
+							`${pad}snprintf(${id}_buf, sizeof(${id}_buf), "${fmt}"${argsPart});`,
+							`${pad}String ${id} = String(${id}_buf);`
+						],
 						{ portId: 'out', depthDelta: 0 }
 					]
 				};

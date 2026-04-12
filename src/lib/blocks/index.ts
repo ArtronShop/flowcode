@@ -2,6 +2,7 @@ import { triggerCategory } from './trigger.js';
 import { ioCategory } from './io.js';
 import { controlCategory } from './control.js';
 import { dataCategory } from './data.js';
+import { variableCategory } from './variable.js';
 import { serialCategory } from './serial.js';
 import { functionCategory } from './function.js';
 import { i2cCategory } from './i2c.js';
@@ -20,6 +21,7 @@ export const blockCategories = [
 	ioCategory,
 	controlCategory,
 	dataCategory,
+	variableCategory,
 	serialCategory,
 	functionCategory,
 	i2cCategory,
