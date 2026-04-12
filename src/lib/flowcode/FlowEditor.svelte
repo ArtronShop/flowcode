@@ -95,6 +95,9 @@
 	let mousePos = $state({ x: 0, y: 0 });
 	let selectedConnId = $state<string | null>(null);
 	let selectedBlockId = $state<string | null>(null);
+	let selectedBlockIds = $state<Set<string>>(new Set());
+	let selectedConnIds = $state<Set<string>>(new Set());
+	let multiDragOffsets = $state<Map<string, { ox: number; oy: number }> | null>(null);
 	let draggingConnEnd = $state<{ connId: string; end: 'from' | 'to' } | null>(null);
 	let searchQuery = $state('');
 	let contextMenu = $state<{ x: number; y: number; blockId: string } | null>(null);
@@ -225,15 +228,61 @@
 		e.preventDefault();
 		e.stopPropagation();
 		(document.activeElement as HTMLElement)?.blur();
+
+		const cc = toCanvasCoords(e.clientX, e.clientY);
+
+		if (e.shiftKey) {
+			// Shift+Click: toggle block in multi-select
+			const newSet = new Set(selectedBlockIds);
+			if (selectedBlockId && selectedBlockId !== block.id) newSet.add(selectedBlockId);
+
+			const wasSelected = newSet.has(block.id) || selectedBlockId === block.id;
+			if (wasSelected) {
+				// Deselect: remove from set, move focus to another remaining block or clear
+				newSet.delete(block.id);
+				const remaining = [...newSet];
+				selectedBlockId = remaining.length > 0 ? remaining[remaining.length - 1] : null;
+				selectedBlockIds = newSet;
+				selectedConnId = null;
+				selectedConnIds = new Set();
+				onchange?.(selectedBlockId ? 'block:focus' : 'block:blur');
+				multiDragOffsets = null;
+				draggingBlock = null;
+			} else {
+				// Select: add to set, set as focused
+				newSet.add(block.id);
+				selectedBlockIds = newSet;
+				selectedBlockId = block.id;
+				selectedConnId = null;
+				selectedConnIds = new Set();
+				onchange?.('block:focus');
+				const offsets = new Map<string, { ox: number; oy: number }>();
+				for (const b of canvasBlocks) {
+					if (newSet.has(b.id)) offsets.set(b.id, { ox: cc.x - b.x, oy: cc.y - b.y });
+				}
+				multiDragOffsets = offsets;
+				draggingBlock = { id: block.id, offsetX: cc.x - block.x, offsetY: cc.y - block.y };
+			}
+			return;
+		}
+
+		// Regular click: if block is NOT in multi-select, clear multi-select
+		if (!selectedBlockIds.has(block.id)) {
+			selectedBlockIds = new Set();
+			selectedConnIds = new Set();
+		}
 		selectedBlockId = block.id;
 		selectedConnId = null;
 		onchange?.('block:focus');
-		const cc = toCanvasCoords(e.clientX, e.clientY);
-		draggingBlock = {
-			id: block.id,
-			offsetX: cc.x - block.x,
-			offsetY: cc.y - block.y
-		};
+
+		// Setup drag (multi or single)
+		const allSelected = selectedBlockIds.size > 0 ? selectedBlockIds : new Set([block.id]);
+		const offsets = new Map<string, { ox: number; oy: number }>();
+		for (const b of canvasBlocks) {
+			if (allSelected.has(b.id)) offsets.set(b.id, { ox: cc.x - b.x, oy: cc.y - b.y });
+		}
+		multiDragOffsets = offsets;
+		draggingBlock = { id: block.id, offsetX: cc.x - block.x, offsetY: cc.y - block.y };
 	}
 
 	// ─── Window-level pointer events (palette ghost + block drag) ────
@@ -256,15 +305,23 @@
 		const cc = toCanvasCoords(e.clientX, e.clientY);
 		mousePos = cc;
 		if (draggingBlock) {
-			canvasBlocks = canvasBlocks.map((b) =>
-				b.id === draggingBlock!.id
-					? {
-							...b,
-							x: snap(cc.x - draggingBlock!.offsetX),
-							y: snap(cc.y - draggingBlock!.offsetY)
-						}
-					: b
-			);
+			if (multiDragOffsets && multiDragOffsets.size > 1) {
+				canvasBlocks = canvasBlocks.map((b) => {
+					const off = multiDragOffsets!.get(b.id);
+					if (!off) return b;
+					return { ...b, x: snap(Math.max(0, cc.x - off.ox)), y: snap(Math.max(0, cc.y - off.oy)) };
+				});
+			} else {
+				canvasBlocks = canvasBlocks.map((b) =>
+					b.id === draggingBlock!.id
+						? {
+								...b,
+								x: snap(cc.x - draggingBlock!.offsetX),
+								y: snap(cc.y - draggingBlock!.offsetY)
+							}
+						: b
+				);
+			}
 			onchange?.('block:move');
 		}
 	}
@@ -315,14 +372,17 @@
 			if (!hit) connectingFrom = null;
 		}
 		draggingBlock = null;
+		multiDragOffsets = null;
 	}
 
 	function handleCanvasClick() {
 		connectingFrom = null;
-		const hadBlock = selectedBlockId !== null;
-		const hadConn = selectedConnId !== null;
+		const hadBlock = selectedBlockId !== null || selectedBlockIds.size > 0;
+		const hadConn = selectedConnId !== null || selectedConnIds.size > 0;
 		selectedConnId = null;
 		selectedBlockId = null;
+		selectedBlockIds = new Set();
+		selectedConnIds = new Set();
 		(document.activeElement as HTMLElement)?.blur();
 		if (hadBlock) onchange?.('block:blur');
 		else if (hadConn) onchange?.('conn:blur');
@@ -374,7 +434,16 @@
 		const active = document.activeElement;
 		const isInput = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
 		if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput) {
-			if (selectedBlockId) {
+			if (selectedBlockIds.size > 0) {
+				const toDelete = new Set([...selectedBlockIds, ...(selectedBlockId ? [selectedBlockId] : [])]);
+				for (const id of toDelete) deleteBlock(id);
+				selectedBlockIds = new Set();
+				selectedBlockId = null;
+			} else if (selectedConnIds.size > 0) {
+				for (const id of selectedConnIds) deleteConnection(id);
+				selectedConnIds = new Set();
+				selectedConnId = null;
+			} else if (selectedBlockId) {
 				deleteBlock(selectedBlockId);
 				selectedBlockId = null;
 			} else if (selectedConnId) {
@@ -382,16 +451,33 @@
 				selectedConnId = null;
 			}
 		}
-		if (e.key === 'Escape') {
-			const hadBlock = selectedBlockId !== null;
-			const hadConn = selectedConnId !== null;
+		if (e.ctrlKey && e.key === 'a' && !isInput) {
+			e.preventDefault();
+			selectedBlockIds = new Set(canvasBlocks.map((b) => b.id));
+			selectedConnIds = new Set(connections.map((c) => c.id));
 			selectedBlockId = null;
 			selectedConnId = null;
+		}
+		if (e.key === 'Escape') {
+			const hadBlock = selectedBlockId !== null || selectedBlockIds.size > 0;
+			const hadConn = selectedConnId !== null || selectedConnIds.size > 0;
+			selectedBlockId = null;
+			selectedBlockIds = new Set();
+			selectedConnId = null;
+			selectedConnIds = new Set();
 			connectingFrom = null;
 			draggingConnEnd = null;
 			if (hadBlock) onchange?.('block:blur');
 			else if (hadConn) onchange?.('conn:blur');
 		}
+	}
+
+	// ─── Select All (public API) ─────────────────────────────────────
+	export function selectAll() {
+		selectedBlockIds = new Set(canvasBlocks.map((b) => b.id));
+		selectedConnIds = new Set(connections.map((c) => c.id));
+		selectedBlockId = null;
+		selectedConnId = null;
 	}
 
 	// ─── Port interaction ────────────────────────────────────────────
@@ -668,11 +754,11 @@
 
 				<!-- Existing connections -->
 				{#each connections as conn (conn.id)}
-					{@const isSelected = selectedConnId === conn.id}
+					{@const isSelected = selectedConnId === conn.id || selectedConnIds.has(conn.id)}
 					{@const isDraggingThis = draggingConnEnd?.connId === conn.id}
 					<g
 						style="pointer-events:stroke; cursor:pointer;"
-						onclick={(e) => { e.stopPropagation(); if (selectedBlockId) { selectedBlockId = null; onchange?.('block:blur'); } selectedConnId = conn.id; onchange?.('conn:focus'); }}
+						onclick={(e) => { e.stopPropagation(); if (e.shiftKey) { const ns = new Set(selectedConnIds); ns.has(conn.id) ? ns.delete(conn.id) : ns.add(conn.id); selectedConnIds = ns; onchange?.('conn:focus'); } else { selectedConnIds = new Set(); if (selectedBlockId) { selectedBlockId = null; selectedBlockIds = new Set(); onchange?.('block:blur'); } selectedConnId = conn.id; onchange?.('conn:focus'); } }}
 						onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); if (selectedBlockId) { selectedBlockId = null; onchange?.('block:blur'); } selectedConnId = conn.id; onchange?.('conn:focus'); } }}
 						role="button"
 						tabindex="0"
@@ -761,7 +847,7 @@
 				>
 					<div
 						class="absolute inset-0 select-none overflow-visible rounded-xl border shadow-xl transition-shadow"
-						style="border-color:{selectedBlockId === block.id ? '#60a5fa' : block.color+'55'}; background:linear-gradient(160deg,#1e293b,#0f172a); cursor:move; {selectedBlockId === block.id ? 'box-shadow:0 0 0 2px #3b82f6, 0 0 16px #3b82f640;' : ''}"
+						style="border-color:{selectedBlockId === block.id || selectedBlockIds.has(block.id) ? '#60a5fa' : block.color+'55'}; background:linear-gradient(160deg,#1e293b,#0f172a); cursor:move; {selectedBlockId === block.id || selectedBlockIds.has(block.id) ? 'box-shadow:0 0 0 2px #3b82f6, 0 0 16px #3b82f640;' : ''}"
 					>
 						<!-- Colored top bar -->
 						<div class="flex h-8 items-center rounded-t-xl px-2.5" style="background:{block.color}22; border-bottom:1px solid {block.color}40;">

@@ -418,6 +418,19 @@
 	});
 </script>
 
+<svelte:window onkeydown={(e) => {
+	const active = document.activeElement;
+	const isInput = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
+	if (isInput) return;
+	if (e.ctrlKey && e.key === 'o') { e.preventDefault(); openProject(); }
+	else if (e.ctrlKey && e.key === 'n') { e.preventDefault(); newProject(); }
+	else if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveProject(); }
+	else if (e.ctrlKey && e.key === 'r') { e.preventDefault(); runProject(); }
+	else if (e.ctrlKey && e.key === 'm') { e.preventDefault(); activeConsoleTab = 'serial'; }
+	else if (e.ctrlKey && e.key === 'h') { e.preventDefault(); togglePanel('help'); helpBlockDef = null; }
+	else if (e.ctrlKey && e.key === 'e') { e.preventDefault(); togglePanel('extensions'); }
+}} />
+
 <ConfirmDialog
 	bind:open={confirmDialogOpen}
 	{...confirmDialogOption}
@@ -810,8 +823,61 @@
 										<li>• ลากบล็อกจากแผง <span class="text-white">Blocks</span> มาวางบน Canvas</li>
 										<li>• คลิกพอร์ต Output ลากไปพอร์ต Input เพื่อเชื่อมต่อ</li>
 										<li>• คลิกบล็อกเพื่อเลือก กด <kbd class="rounded bg-gray-700 px-1 font-mono">Del</kbd> เพื่อลบ</li>
+										<li>• <kbd class="rounded bg-gray-700 px-1 font-mono">Shift</kbd> + คลิก เพื่อเลือกบล็อก/เส้นหลายชิ้น</li>
 										<li>• คลิกขวาที่บล็อก → วิธีใช้ เพื่อดูรายละเอียด</li>
 										<li>• เลื่อนล้อเมาส์เพื่อซูม ลากพื้นที่ว่างเพื่อเลื่อน Canvas</li>
+									</ul>
+								</div>
+
+								<hr class="border-gray-700/60" />
+
+								<div>
+									<p class="mb-1.5 font-semibold text-gray-300">คีย์ลัด</p>
+									<ul class="space-y-1.5 leading-relaxed">
+										<li class="flex items-center justify-between gap-2">
+											<span>เปิดโปรเจค</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">O</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>สร้างโปรเจคใหม่</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">N</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>บันทึกโปรเจค</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">S</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>Run</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">R</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>Serial Monitor</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">M</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>เปิด/ปิด Help</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">H</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>เปิด/ปิด Extensions</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">E</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>เลือกทั้งหมด</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">A</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>เลือกหลายชิ้น</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">Shift</kbd><kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">Click</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>ลบที่เลือก</span>
+											<kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">Del</kbd>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>ยกเลิกการเลือก</span>
+											<kbd class="rounded bg-gray-700 px-1.5 py-0.5 font-mono text-gray-300">Esc</kbd>
+										</li>
 									</ul>
 								</div>
 
