@@ -26,6 +26,15 @@
 	};
 
 	let extensions = $state<ExtensionItem[]>(extensionIndex.map((e) => ({ ...e, installed: false })));
+	let extensionSearch = $state('');
+	const filteredExtensions = $derived(() => {
+		const q = extensionSearch.trim().toLowerCase();
+		if (!q) return extensions;
+		return extensions.filter(e =>
+			e.name.toLowerCase().includes(q) ||
+			e.description.toLowerCase().includes(q)
+		);
+	});
 
 	let selectedBoard = $state(boards[0]);
 	let boardConnected = $state(false);
@@ -673,14 +682,22 @@
 						</div>
 					{:else if activePanel === 'extensions'}
 						<div class="space-y-2">
-							<p class="mb-3 text-[11px] text-gray-500">ติดตั้งแล้ว</p>
-							{#each extensions.filter(a => a.installed) as ext}
+							<input
+								bind:value={extensionSearch}
+								type="text"
+								placeholder="ค้นหา Extension…"
+								class="mb-3 w-full rounded-md border border-gray-700 bg-gray-800 px-2.5 py-1.5 text-xs text-gray-200 placeholder-gray-500 outline-none focus:border-blue-500"
+							/>
+							{#if filteredExtensions().filter(a => a.installed).length > 0}
+							<p class="mb-1 text-[11px] text-gray-500">ติดตั้งแล้ว</p>
+							{/if}
+							{#each filteredExtensions().filter(a => a.installed) as ext}
 								<div class="rounded-lg border border-gray-700/60 bg-gray-800/40 px-3 py-2.5 text-xs">
 									<div class="flex items-start gap-2">
 										<div class="min-w-0 flex-1">
 											<div class="flex items-center gap-1.5">
 												<span class="font-semibold text-gray-200">{ext.name}</span>
-												<span class="rounded bg-gray-700 px-1 py-px font-mono text-[9px] text-gray-500">v{ext.version}</span>
+												<span class="rounded bg-gray-700 px-1 py-px font-mono text-[9px] text-gray-400">v{ext.version}</span>
 												{#if ext.installed}
 													<CircleCheck size={11} class="ml-auto shrink-0 text-green-500" />
 												{/if}
@@ -708,15 +725,17 @@
 									</div>
 								</div>
 							{/each}
-							<hr class="border-gray-700/60" />
-							<p class="mb-3 text-[11px] text-gray-500">ยังไม่ติดตั้ง</p>
-							{#each extensions.filter(a => !a.installed) as ext}
+							{#if filteredExtensions().filter(a => !a.installed).length > 0}
+							<!-- <hr class="border-gray-700/60 mb-3" /> -->
+							<p class="mt-3 mb-1 text-[11px] text-gray-500">ยังไม่ติดตั้ง</p>
+							{/if}
+							{#each filteredExtensions().filter(a => !a.installed) as ext}
 								<div class="rounded-lg border border-gray-700/60 bg-gray-800/40 px-3 py-2.5 text-xs">
 									<div class="flex items-start gap-2">
 										<div class="min-w-0 flex-1">
 											<div class="flex items-center gap-1.5">
 												<span class="font-semibold text-gray-200">{ext.name}</span>
-												<span class="rounded bg-gray-700 px-1 py-px font-mono text-[9px] text-gray-500">v{ext.version}</span>
+												<span class="rounded bg-gray-700 px-1 py-px font-mono text-[9px] text-gray-400">v{ext.version}</span>
 												{#if ext.installed}
 													<CircleCheck size={11} class="ml-auto shrink-0 text-green-500" />
 												{/if}
@@ -744,6 +763,9 @@
 									</div>
 								</div>
 							{/each}
+							{#if filteredExtensions().length === 0}
+								<p class="py-4 text-center text-[11px] text-gray-500">ไม่พบ Extension ที่ตรงกับ "{extensionSearch}"</p>
+							{/if}
 						</div>
 					{:else if activePanel === 'help'}
 						{#if helpBlockDef}
