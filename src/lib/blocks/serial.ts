@@ -55,14 +55,18 @@ export const serialCategory: BlockCategory = {
 			],
 			outputs: [{ id: 'next', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปยังบล็อกถัดไป' }],
 			params: [
-				{ id: 'text', label: 'Text', type: 'text', default: 'Hello, World !', 'description': 'ข้อความที่ต้องการส่งออก Serial' }
+				{ id: 'text', label: 'Text', type: 'text', default: 'Hello, World !', 'description': 'ข้อความที่ต้องการส่งออก Serial' },
+				{ id: 'newline', label: 'New Line', type: 'option', options: [
+					{ label: 'Yes', value: 'println', description: 'ขึ้นบรรทัดใหม่' },
+					{ label: 'No', value: 'print', description: 'ไม่ขึ้นบรรทัดใหม่' },
+				], default: 'println', description: 'ขึ้นบรรทัดใหม่' }
 			],
 			toCode({ pad, resolveInput, params }) {
-				let val = resolveInput('value') ?? params.text ?? '';
-				val = val.replaceAll('"', '\\"');
+				const val = resolveInput('value') ?? '"' + (params.text?.replaceAll('"', '\\"') ?? '') + '"';
+				const method = params.newline ?? 'print';
 				return {
 					parts: [
-						[`${pad}Serial.print("${val}");`],
+						[`${pad}Serial.${method}(${val});`],
 						{ portId: 'next', depthDelta: 0 }
 					]
 				};
@@ -76,9 +80,9 @@ export const serialCategory: BlockCategory = {
 			category: 'serial',
 			description: 'พิมพ์ค่าตัวแปรจากบล็อกอื่นออก Serial Monitor (Serial.print)',
 			inputs: [],
-			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'String' }],
+			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'void' }],
 			params: [
-				{ id: 'format', type: 'text', label: 'Format', default: 'Value=%d\n', description: 'รูปแบบ printf เช่น "Temp: %.1f" หรือ "Count: %d, Name: %s" (จำนวน input จะปรับตาม specifier อัตโนมัติ)' }
+				{ id: 'format', type: 'text', label: 'Format', default: 'Value=%d\\n', description: 'รูปแบบ printf เช่น "Temp: %.1f" หรือ "Count: %d, Name: %s" (จำนวน input จะปรับตาม specifier อัตโนมัติ)' }
 			],
 			dynamicPorts({ format }) {
 				const specs = getPrintfSpecifiers(format ?? '%d');
