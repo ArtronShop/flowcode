@@ -62,10 +62,12 @@
 		mqtt:      ['mqttClient'],
 		json:      ['doc'],
 		modbus:    ['modbus'],
-		var_int:    ['myInt'],
-		var_float:  ['myFloat'],
-		var_string: ['myString'],
-		var_bool:   ['myBool'],
+		var_int:       ['myInt'],
+		var_float:     ['myFloat'],
+		var_string:    ['myString'],
+		var_bool:      ['myBool'],
+		influxdb:      ['influxClient'],
+		influxdb_point:['sensorPoint'],
 	});
 
 	function getVarnameOptions(category: string) {
