@@ -109,5 +109,91 @@ export const serialCategory: BlockCategory = {
 				};
 			}
 		},
+		{
+			id: 'serial_available',
+			name: 'Serial Available',
+			color: '#6366f1',
+			icon: '📥',
+			category: 'serial',
+			description: 'ตรวจสอบว่ามีข้อมูลรออยู่ใน Serial buffer หรือไม่',
+			inputs:  [
+				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+			],
+			outputs: [
+				{ id: 'value', type: 'output', label: 'Count', dataType: 'int' }
+			],
+			toExpr: () => 'Serial.available()',
+			toCode() {
+				return { 
+					parts: [ ] 
+				}; 
+			}
+		},
+		{
+			id: 'serial_read_line',
+			name: 'Serial Read Line',
+			color: '#6366f1',
+			icon: '📥',
+			category: 'serial',
+			description: 'อ่านข้อความ 1 บรรทัดจาก Serial buffer จนถึง newline (Serial.readStringUntil)',
+			inputs:  [{ id: 'in',  type: 'input',  label: '➜', dataType: 'any'    }],
+			outputs: [
+				{ id: 'value', type: 'output', label: 'Text', dataType: 'String' },
+				{ id: 'out',   type: 'output', label: '➜',    dataType: 'void'   },
+			],
+			toCode({ block, pad, safeId }) {
+				const id = safeId(block.id);
+				return {
+					parts: [
+						[`${pad}String ${id} = Serial.readStringUntil('\\n');`],
+						{ portId: 'out', depthDelta: 0 },
+					]
+				};
+			},
+		},
+		{
+			id: 'serial_read_int',
+			name: 'Serial Read Int',
+			color: '#6366f1',
+			icon: '📥',
+			category: 'serial',
+			description: 'อ่านตัวเลขจำนวนเต็มจาก Serial buffer (Serial.parseInt)',
+			inputs:  [{ id: 'in',  type: 'input',  label: '➜', dataType: 'any' }],
+			outputs: [
+				{ id: 'value', type: 'output', label: 'Value', dataType: 'int'  },
+				{ id: 'out',   type: 'output', label: '➜',     dataType: 'void' },
+			],
+			toCode({ block, pad, safeId }) {
+				const id = safeId(block.id);
+				return {
+					parts: [
+						[`${pad}int ${id} = Serial.parseInt();`],
+						{ portId: 'out', depthDelta: 0 },
+					]
+				};
+			},
+		},
+		{
+			id: 'serial_read_float',
+			name: 'Serial Read Float',
+			color: '#6366f1',
+			icon: '📥',
+			category: 'serial',
+			description: 'อ่านตัวเลขทศนิยมจาก Serial buffer (Serial.parseFloat)',
+			inputs:  [{ id: 'in',  type: 'input',  label: '➜', dataType: 'any'   }],
+			outputs: [
+				{ id: 'value', type: 'output', label: 'Value', dataType: 'float' },
+				{ id: 'out',   type: 'output', label: '➜',     dataType: 'void'  },
+			],
+			toCode({ block, pad, safeId }) {
+				const id = safeId(block.id);
+				return {
+					parts: [
+						[`${pad}float ${id} = Serial.parseFloat();`],
+						{ portId: 'out', depthDelta: 0 },
+					]
+				};
+			},
+		},
 	]
 };
