@@ -125,10 +125,32 @@ export const controlCategory: BlockCategory = {
 				const count = resolveInput('count') ?? params.count ?? '10';
 				return {
 					parts: [
-						[`${pad}for (int i=0;i<${count};i++) {`],
+						[`${pad}for (int _loop_i=0;_loop_i<${count};_loop_i++) {`],
 						{ portId: 'body', depthDelta: 1 },
 						[`${pad}}`],
 						{ portId: 'done', depthDelta: 0 }
+					]
+				};
+			}
+		},
+		{
+			id: 'for_loop_get_index',
+			name: 'For Loop Get Index',
+			color: '#06b6d4',
+			icon: 'i',
+			category: 'logic',
+			description: 'ดึงตัวแปร i จำนวนรอบ',
+			inputs: [
+				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+			],
+			outputs: [
+				{ id: 'out', type: 'output', label: 'Index', dataType: 'int', description: 'รอบที่ ...' }
+			],
+			toExpr: () => '_loop_i',
+			toCode({ pad, resolveInput, params }) {
+				return {
+					parts: [
+						{ portId: 'out', depthDelta: 0 }
 					]
 				};
 			}
