@@ -9,6 +9,7 @@ import esp32c5dev from './esp32c5dev.js';
 
 // High Level board
 import tinker_c6 from './tinker_c6.js';
+import esphub75 from './esphub75.js';
 
 const boards: BoardItem[] = [
     esp32dev,
@@ -16,7 +17,8 @@ const boards: BoardItem[] = [
     esp32c3dev,
     esp32c5dev,
     esp32c6dev,
-    tinker_c6
+    tinker_c6,
+    esphub75,
 ];
 
 export default boards;
