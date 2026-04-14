@@ -12,6 +12,7 @@ export const ioCategory: BlockCategory = {
 			description: 'กำหนดโหมดการทำงานของขา GPIO เช่น INPUT, OUTPUT หรือ INPUT_PULLUP (pinMode)',
 			inputs: [
 				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+				{ id: 'pin', type: 'input', label: 'Pin', dataType: 'int', description: 'หมายเลขขา GPIO' },
 			],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปยังบล็อกถัดไป' }],
 			params: [
@@ -31,11 +32,12 @@ export const ioCategory: BlockCategory = {
 						{ label: 'INPUT', value: 'INPUT' },
 						{ label: 'OUTPUT', value: 'OUTPUT' },
 						{ label: 'INPUT_PULLUP', value: 'INPUT_PULLUP' }
-					]
+					],
+					default: 'OUTPUT'
 				}
 			],
-			toCode({ pad, params }) {
-				const pin = params.pin ?? '5';
+			toCode({ pad, params, resolveInput }) {
+				const pin = resolveInput('pin') ?? params.pin ?? '5';
 				const mode = params.mode ?? 'INPUT';
 				return {
 					parts: [
@@ -54,6 +56,7 @@ export const ioCategory: BlockCategory = {
 			description: 'อ่านค่าดิจิทัล (0 = LOW, 1 = HIGH) จากขา GPIO ที่กำหนด (digitalRead)',
 			inputs: [
 				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+				{ id: 'pin', type: 'input', label: 'Pin', dataType: 'int', description: 'หมายเลขขา GPIO' },
 			],
 			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'int', description: 'ค่าที่อ่านได้จากขา GPIO (int: 0 หรือ 1)' }],
 			params: [
@@ -65,9 +68,9 @@ export const ioCategory: BlockCategory = {
 					default: '2'
 				}
 			],
-			toCode({ block, pad, safeId, params }) {
+			toCode({ block, pad, safeId, params, resolveInput }) {
 				const id = safeId(block.id);
-				let pin = params.pin ?? '2';
+				let pin = resolveInput('pin') ?? params.pin ?? '2';
 				return {
 					parts: [
 						[`${pad}int ${id} = digitalRead(${pin});`],
@@ -85,6 +88,8 @@ export const ioCategory: BlockCategory = {
 			description: 'เขียนค่าดิจิทัล HIGH หรือ LOW ออกขา GPIO ที่กำหนด (digitalWrite)',
 			inputs: [
 				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+				{ id: 'pin', type: 'input', label: 'Pin', dataType: 'int', description: 'หมายเลขขา GPIO' },
+				{ id: 'value', type: 'input', label: 'Value', dataType: 'int', description: 'ค่าที่ต้องการเขียน' },
 			],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปยังบล็อกถัดไป' }],
 			params: [
@@ -101,38 +106,14 @@ export const ioCategory: BlockCategory = {
 					type: 'option',
 					label: 'Value',
 					options: [
-						{ label: 'LOW', value: 'LOW' },
-						{ label: 'HIGH', value: 'HIGH' },
+						{ label: 'LOW (0)', value: 'LOW' },
+						{ label: 'HIGH (1)', value: 'HIGH' },
 					]
 				}
 			],
-			toCode({ pad, params }) {
-				const pin = params.pin ?? '5';
-				const val = params.value ?? 'LOW';
-				return {
-					parts: [
-						[`${pad}digitalWrite(${pin}, ${val});`],
-						{ portId: 'out', depthDelta: 0 }
-					]
-				};
-			}
-		},
-		{
-			id: 'digital_write2',
-			name: 'Digital Write 2',
-			color: '#3b82f6',
-			icon: '✍️',
-			category: 'io',
-			description: 'เขียนค่าดิจิทัลออกขา GPIO โดยรับทั้งหมายเลขขาและค่าจากบล็อกอื่นแบบไดนามิก',
-			inputs: [
-				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
-				{ id: 'pin', type: 'input', label: 'Pin', dataType: 'int', description: 'หมายเลขขา GPIO ที่ต้องการเขียน' },
-				{ id: 'value', type: 'input', label: 'Value', dataType: 'int', description: 'ค่าที่ต้องการเขียน (0 = LOW, 1 = HIGH)' }
-			],
-			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปยังบล็อกถัดไป' }],
-			toCode({ pad, resolveInput }) {
-				const pin = resolveInput('pin') ?? '-1';
-				const val = resolveInput('value') ?? '0';
+			toCode({ pad, resolveInput, params }) {
+				const pin = resolveInput('pin') ?? params.pin ?? '5';
+				const val = resolveInput('value') ?? params.value ?? 'LOW';
 				return {
 					parts: [
 						[`${pad}digitalWrite(${pin}, ${val});`],
@@ -150,6 +131,8 @@ export const ioCategory: BlockCategory = {
 			description: 'สลับสถานะ HIGH/LOW ของขา GPIO (toggle) — อ่านค่าปัจจุบันแล้วกลับค่า',
 			inputs: [
 				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+				{ id: 'pin', type: 'input', label: 'Pin', dataType: 'int', description: 'หมายเลขขา GPIO' },
+
 			],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปยังบล็อกถัดไป' }],
 			params: [
@@ -161,8 +144,8 @@ export const ioCategory: BlockCategory = {
 					default: '2'
 				}
 			],
-			toCode({ pad, params }) {
-				let pin = params.pin ?? '5';
+			toCode({ pad, params, resolveInput }) {
+				let pin = resolveInput('pin') ?? params.pin ?? '5';
 				return {
 					parts: [
 						[`${pad}digitalWrite(${pin}, !digitalRead(${pin}));`],
@@ -178,7 +161,11 @@ export const ioCategory: BlockCategory = {
 			icon: '🌊',
 			category: 'io',
 			description: 'อ่านค่า Analog จากขา ADC (0–4095 สำหรับ ESP32 หรือ 0–1023 สำหรับ Arduino) (analogRead)',
-			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
+			inputs: [
+				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+				{ id: 'pin', type: 'input', label: 'Pin', dataType: 'int', description: 'หมายเลขขา GPIO' },
+
+			],
 			outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'int', description: 'ค่าที่อ่านได้จากขา ADC (int)' }],
 			params: [
 				{
@@ -186,12 +173,12 @@ export const ioCategory: BlockCategory = {
 					description: 'หมายเลขขา GPIO ที่ต้องการอ่านค่าแอนะล็อก',
 					type: 'number',
 					label: 'Pin',
-					default: '5'
+					default: '32'
 				},
 			],
-			toCode({ block, pad, safeId, params }) {
+			toCode({ block, pad, safeId, params, resolveInput }) {
 				const id = safeId(block.id);
-				const pin = params.pin ?? '5';
+				const pin = resolveInput('pin') ?? params.pin ?? '32';
 				return {
 					parts: [
 						[`${pad}int ${id} = analogRead(${pin});`],
@@ -209,6 +196,8 @@ export const ioCategory: BlockCategory = {
 			description: 'ส่งสัญญาณ PWM ออกขา GPIO ค่า 0–255 (analogWrite)',
 			inputs: [
 				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+				{ id: 'pin', type: 'input', label: 'Pin', dataType: 'int', description: 'หมายเลขขา GPIO' },
+				{ id: 'value', type: 'input', label: 'Value', dataType: 'int', description: 'ค่าที่ต้องการเขียน' },
 			],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void', description: 'ส่งสายลำดับการทำงานต่อไปยังบล็อกถัดไป' }],
 			params: [
@@ -227,12 +216,12 @@ export const ioCategory: BlockCategory = {
 					validation: (n: number) => n < 0 ? 0 : n > 255 ? 255 : n,
 				}
 			],
-			toCode({ pad, params }) {
-				const pin = params.pin ?? '5';
-				const val = params.value ?? 'LOW';
+			toCode({ pad, params, resolveInput }) {
+				const pin = resolveInput('pin') ?? params.pin ?? '5';
+				const value = resolveInput('value') ?? params.value ?? 'LOW';
 				return {
 					parts: [
-						[`${pad}digitalWrite(${pin}, ${val});`],
+						[`${pad}digitalWrite(${pin}, ${value});`],
 						{ portId: 'out', depthDelta: 0 }
 					]
 				};
@@ -247,6 +236,7 @@ export const ioCategory: BlockCategory = {
 			description: 'วัดความกว้างของพัลส์ HIGH หรือ LOW บนขา GPIO (pulseIn) คืนค่าเป็น microseconds',
 			inputs: [
 				{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' },
+				{ id: 'pin', type: 'input', label: 'Pin', dataType: 'int', description: 'หมายเลขขา GPIO' },
 			],
 			outputs: [{ id: 'time', type: 'output', label: 'Time (uS)', dataType: 'long', description: 'ความกว้างของพัลส์ที่วัดได้ (microseconds)' }],
 			params: [
@@ -275,9 +265,9 @@ export const ioCategory: BlockCategory = {
 					default: '1000000'
 				}
 			],
-			toCode({ pad, block, safeId, params }) {
+			toCode({ pad, block, safeId, params, resolveInput }) {
 				const id = safeId(block.id);
-				const pin = params.pin ?? '5';
+				const pin = resolveInput('pin') ?? params.pin ?? '5';
 				const val = params.value ?? 'LOW';
 				const timeout = params.timeout ?? '1000000';
 				return {
