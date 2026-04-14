@@ -104,25 +104,46 @@ export const dataCategory: BlockCategory = {
 			icon: '±',
 			category: 'data',
 			inputs: [
-				{ id: 'a', type: 'input', label: 'A', dataType: 'float' },
-				{ id: 'b', type: 'input', label: 'B', dataType: 'float' }
+				{ id: 'a', type: 'input', label: 'A', dataType: 'any' },
+				{ id: 'b', type: 'input', label: 'B', dataType: 'any' }
 			],
-			outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: 'float' }],
-			params: [{
-				id: 'operator', label: 'Operator', type: 'option', options: [
-					{ label: '+', value: '+' },
-					{ label: '-', value: '-' },
-					{ label: '×', value: '*' },
-					{ label: '÷', value: '/' },
-				]
-			}],
+			outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: 'int' }],
+			params: [
+				{
+					id: 'operator', label: 'Operator', type: 'option', options: [
+						{ label: '+', value: '+' },
+						{ label: '-', value: '-' },
+						{ label: '×', value: '*' },
+						{ label: '÷', value: '/' },
+						{ label: '%', value: '%' },
+					]
+				},
+				{
+					id: 'output_type', label: 'Output Type', type: 'option', options: [
+						{ label: 'int', value: 'int' },
+						{ label: 'long', value: 'long' },
+						{ label: 'float', value: 'float' },
+					],
+					default: 'int',
+				},
+			],
+			dynamicPorts({ output_type }) {
+				const dt = (output_type ?? 'int') as import('./types.js').DataType;
+				return {
+					outputs: [
+						{ id: 'result', type: 'output' as const, label: 'Result', dataType: dt },
+					],
+				};
+			},
 			toCode({ block, pad, safeId, resolveInput, params }) {
 				const a = resolveInput('a') ?? '0';
 				const b = resolveInput('b') ?? '0';
-				const operator = params?.operator || '+';
+				const operator = params.operator ?? '+';
+				const type = params.output_type ?? 'int';
+				// Cast both operands so integer division becomes float when needed
 				return {
 					parts: [
-						[`${pad}float ${safeId(block.id)} = ${a} ${operator} ${b};`],
+						[`${pad}${type} ${safeId(block.id)} = (${type})(${a}) ${operator} (${type})(${b});`],
 						{ portId: 'result', depthDelta: 0 }
 					]
 				};
