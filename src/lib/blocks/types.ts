@@ -180,6 +180,11 @@ export type ParamNumber = ParamBase & {
 	validation?: (n: number) => number;
 };
 
+export type ParamColor = ParamBase & {
+	type: 'color';
+	format: 'rgb565' | 'rgb8'
+};
+
 /** param ที่เลือก variable name จากฐานข้อมูล varname registry */
 export type ParamVarname = ParamBase & {
 	type: 'varname';
@@ -187,11 +192,12 @@ export type ParamVarname = ParamBase & {
 	category: string;
 };
 
-export type ParamDef = ParamOption | ParamText | ParamNumber | ParamVarname;
+export type ParamDef = ParamOption | ParamText | ParamNumber | ParamColor | ParamVarname;
 
 /** helper: คืนค่า default ของ param */
 export function paramDefault(p: ParamDef): string {
 	if (p.type === 'option') return p.default ?? p.options[0]?.value ?? '';
+	if (p.type === 'color')  return p.default ?? (p.format === 'rgb565' ? '0' : '0x000000');
 	return p.default ?? (p.type === 'number' ? '0' : '');
 }
 

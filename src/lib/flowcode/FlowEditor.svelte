@@ -10,7 +10,8 @@
 		BlockDef,
 		BlockCategory,
 		DataType,
-		ParamVarname
+		ParamVarname,
+		ParamColor
 	} from '$lib/blocks/types.js';
 	import { flowToC } from './engine.js';
 	import BlockContextMenu from '$lib/components/BlockContextMenu.svelte';
@@ -570,6 +571,44 @@
 		onchange?.('conn:delete');
 	}
 
+	// ─── Color param helpers ─────────────────────────────────────────────────
+
+	/** Parse a color param value string (decimal or 0x/0X hex) to a number */
+	function parseColorValue(value: string): number {
+		const s = value.trim();
+		if (s.startsWith('0x') || s.startsWith('0X')) return parseInt(s.slice(2), 16) || 0;
+		return parseInt(s) || 0;
+	}
+
+	/** Convert stored color param value → #RRGGBB for <input type="color"> */
+	function colorParamToHex(value: string, format: 'rgb565' | 'rgb8'): string {
+		const n = parseColorValue(value);
+		if (format === 'rgb565') {
+			const r = ((n >> 11) & 0x1F) << 3;
+			const g = ((n >> 5)  & 0x3F) << 2;
+			const b =  (n        & 0x1F) << 3;
+			return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+		} else {
+			return `#${(n & 0xFFFFFF).toString(16).padStart(6,'0')}`;
+		}
+	}
+
+	/** Convert #RRGGBB from <input type="color"> → stored color param value */
+	function hexToColorParam(hex: string, format: 'rgb565' | 'rgb8'): string {
+		const r = parseInt(hex.slice(1, 3), 16) || 0;
+		const g = parseInt(hex.slice(3, 5), 16) || 0;
+		const b = parseInt(hex.slice(5, 7), 16) || 0;
+		if (format === 'rgb565') {
+			const r5 = (r >> 3) & 0x1F;
+			const g6 = (g >> 2) & 0x3F;
+			const b5 = (b >> 3) & 0x1F;
+			const v   = (r5 << 11) | (g6 << 5) | b5;
+			return `0x${v.toString(16).toUpperCase().padStart(4, '0')}`;
+		} else {
+			return `0x${r.toString(16).padStart(2,'0').toUpperCase()}${g.toString(16).padStart(2,'0').toUpperCase()}${b.toString(16).padStart(2,'0').toUpperCase()}`;
+		}
+	}
+
 	function updateBlockParam(blockId: string, paramId: string, raw: string) {
 		const def = defMap[canvasBlocks.find((b) => b.id === blockId)?.typeId ?? ''];
 		const pDef = def?.params?.find((p) => p.id === paramId);
@@ -928,6 +967,20 @@
 												onmousedown={(e) => e.stopPropagation()}
 												onchange={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLInputElement).value)}
 											/>
+										{:else if pDef.type === 'color'}
+											{@const colorDef = pDef as ParamColor}
+											{@const pValFormat = `0x${(+pVal).toString(16).padStart(4, '0').toUpperCase()}`}
+											<div class="flex items-center gap-1 w-full" style="height:{PARAM_INPUT_H}px">
+												<input
+													class="port-btn rounded border border-gray-700 cursor-pointer shrink-0"
+													style="width:{PARAM_INPUT_H}px; height:{PARAM_INPUT_H}px; padding:2px;"
+													type="color"
+													value={colorParamToHex(pVal, colorDef.format)}
+													onmousedown={(e) => e.stopPropagation()}
+													onchange={(e) => updateBlockParam(block.id, pDef.id, hexToColorParam((e.target as HTMLInputElement).value, colorDef.format))}
+												/>
+												<span class="text-[9px] text-gray-400 font-mono truncate select-none">{pValFormat}</span>
+											</div>
 										{:else}
 											<input
 												class="port-btn w-full rounded border border-gray-700 bg-gray-900 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-500 focus:outline-none"
