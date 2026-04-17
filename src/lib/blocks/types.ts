@@ -165,9 +165,12 @@ type ParamBase = {
 	hidden?: boolean | HiddenFn;
 };
 
+export type ParamOptionItem = { label: string; value: string; description?: string; };
+
 export type ParamOption = ParamBase & {
 	type: 'option';
-	options: { label: string; value: string; description?: string; }[];
+	/** array ธรรมดา หรือ function (params) => array สำหรับ options แบบ dynamic */
+	options: ParamOptionItem[] | ((params: Record<string, string>) => ParamOptionItem[]);
 };
 
 export type ParamText = ParamBase & {
@@ -196,7 +199,7 @@ export type ParamDef = ParamOption | ParamText | ParamNumber | ParamColor | Para
 
 /** helper: คืนค่า default ของ param */
 export function paramDefault(p: ParamDef): string {
-	if (p.type === 'option') return p.default ?? p.options[0]?.value ?? '';
+	if (p.type === 'option') return p.default ?? (Array.isArray(p.options) ? p.options[0]?.value : undefined) ?? '';
 	if (p.type === 'color')  return p.default ?? (p.format === 'rgb565' ? '0' : '0x000000');
 	return p.default ?? (p.type === 'number' ? '0' : '');
 }

@@ -950,9 +950,10 @@
 												style="height:{PARAM_INPUT_H}px; font-size:10px;"
 											/>
 										{:else if pDef.type === 'option'}
+											{@const resolvedOptions = typeof pDef.options === 'function' ? pDef.options(block.params ?? {}) : pDef.options}
 											<Dropdown
 												value={pVal}
-												options={pDef.options}
+												options={resolvedOptions}
 												onchange={(v) => updateBlockParam(block.id, pDef.id, v)}
 												onmousedown={(e) => e.stopPropagation()}
 												style="height:{PARAM_INPUT_H}px; font-size:10px;"
