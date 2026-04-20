@@ -4,6 +4,7 @@
 		message?: string;
 		confirmLabel?: string;
 		cancelLabel?: string;
+		hideCancel?: boolean;
 		onconfirm?: () => void;
 		oncancel?: () => void;
 	}
@@ -18,6 +19,7 @@
 		message = '',
 		confirmLabel = 'ยืนยัน',
 		cancelLabel = 'ยกเลิก',
+		hideCancel = false,
 		onconfirm,
 		oncancel,
 	}: Props = $props();
@@ -55,16 +57,18 @@
 			<div class="px-5 pt-5 pb-4">
 				<p id="dialog-title" class="text-sm font-semibold text-white">{title}</p>
 				{#if message}
-					<p class="mt-1.5 text-xs text-gray-400">{message}</p>
+					<p class="mt-1.5 whitespace-pre-wrap text-xs text-gray-400">{message}</p>
 				{/if}
 			</div>
 			<div class="flex justify-end gap-2 border-t border-gray-700 px-5 py-3">
+				{#if !hideCancel}
 				<button
 					onclick={cancel}
 					class="rounded-lg px-3.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
 				>
 					{cancelLabel}
 				</button>
+				{/if}
 				<button
 					onclick={confirm}
 					class="rounded-lg bg-red-600 px-3.5 py-1.5 text-xs text-white transition-colors hover:bg-red-500"

@@ -239,6 +239,25 @@
 
 	async function runProject() {
 		if (isRunning) return;
+
+		// ── Check required blocks ─────────────────────────────────────────
+		const missingMap = editor?.checkRequires() ?? new Map();
+		if (missingMap.size > 0) {
+			const lines = [...missingMap.entries()].map(([reqId, users]) => {
+				const reqName = editor?.getBlockName(reqId) ?? reqId;
+				return `  • ${reqName}  (ต้องการโดย: ${users.join(', ')})`;
+			});
+			confirmDialogOption = {
+				title: '⚠️ บล็อกที่จำเป็นหายไป',
+				message: `กรุณาเพิ่มบล็อกต่อไปนี้ในพื้นที่ทำงานก่อน:\n${lines.join('\n')}`,
+				confirmLabel: 'ตกลง',
+				hideCancel: true,
+			};
+			confirmDialogOpen = true;
+			return;
+		}
+		// ─────────────────────────────────────────────────────────────────
+
 		isRunning = true;
 		runLogs = [];
 		// activeConsoleTab = 'run';

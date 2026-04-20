@@ -212,6 +212,8 @@ export type BlockDef = {
 	icon: string;
 	category: string;
 	description?: string;
+	/** block IDs that must be present in the workspace before running */
+	requires?: string[];
 	inputs: Port[];
 	outputs: Port[];
 	/** พารามิเตอร์ที่แก้ไขได้บนบล็อก (array, keyed by id) */

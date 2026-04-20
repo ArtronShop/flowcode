@@ -758,6 +758,29 @@
 		onchange?.('zoom');
 	}
 
+	// ─── Requires validation ─────────────────────────────────────────
+	/** คืน map ของ reqId → [blockName, ...] ที่ขาดอยู่ในพื้นที่ทำงาน */
+	export function checkRequires(): Map<string, string[]> {
+		const presentTypeIds = new Set(canvasBlocks.map(b => b.typeId));
+		const missing = new Map<string, string[]>();
+		for (const block of canvasBlocks) {
+			const def = defMap[block.typeId];
+			if (!def?.requires) continue;
+			for (const reqId of def.requires) {
+				if (!presentTypeIds.has(reqId)) {
+					if (!missing.has(reqId)) missing.set(reqId, []);
+					const arr = missing.get(reqId)!;
+					if (!arr.includes(def.name)) arr.push(def.name);
+				}
+			}
+		}
+		return missing;
+	}
+
+	export function getBlockName(typeId: string): string {
+		return defMap[typeId]?.name ?? typeId;
+	}
+
 	// ─── Code generation ─────────────────────────────────────────────
 	export function generateCode() {
 		return flowToC(canvasBlocks, connections, defMap);

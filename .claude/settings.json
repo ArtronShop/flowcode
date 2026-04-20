@@ -10,7 +10,8 @@
       "Bash(xargs grep:*)",
       "Bash(echo \"EXIT:$?\")",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('svelte:', p.dependencies?.svelte || p.devDependencies?.svelte\\)\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\sonth\\GitHub\\ui-click\\src\\lib"
