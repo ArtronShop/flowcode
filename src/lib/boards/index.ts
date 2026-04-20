@@ -1,15 +1,15 @@
-import type { BoardItem } from './types.js'
+import type { BoardItem } from './types'
 
 // Bare board / Dev Kit
-import esp32dev from './esp32dev.js';
-import esp32s3dev from './esp32s3dev.js';
-import esp32c3dev from './esp32c3dev.js';
-import esp32c6dev from './esp32c6dev.js';
-import esp32c5dev from './esp32c5dev.js';
+import esp32dev from './esp32dev';
+import esp32s3dev from './esp32s3dev';
+import esp32c3dev from './esp32c3dev';
+import esp32c6dev from './esp32c6dev';
+import esp32c5dev from './esp32c5dev';
 
 // High Level board
-import tinker_c6 from './tinker_c6.js';
-import esphub75 from './esphub75.js';
+import tinker_c6 from './tinker_c6';
+import esphub75 from './esphub75';
 
 const boards: BoardItem[] = [
     esp32dev,
