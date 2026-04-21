@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import FlowEditor, { type FlowEditorEvent } from '$lib/flowcode/FlowEditor.svelte';
 	import ConfirmDialog, { type ConfirmOptions } from '$lib/components/ConfirmDialog.svelte';
+	import Snackbar from '$lib/components/Snackbar.svelte';
+	import { snackbar } from '$lib/components/snackbar.svelte.js';
 	import Dropdown from '$lib/components/Dropdown.svelte';
 	import CodeViewer from '$lib/components/CodeViewer.svelte';
 	import boards from '$lib/boards/index.js';
@@ -50,6 +52,26 @@
 	agent.onConnect = () => { agentConnected = true; };
 	agent.onDisconnect = () => { agentConnected = false; };
 
+	// ── Persistent snackbar เมื่อเชื่อมต่อ Agent ไม่ได้ ──────────────
+	let agentSnackbarId = $state<number | null>(null);
+	$effect(() => {
+		if (!agentConnected) {
+			if (agentSnackbarId === null) {
+				agentSnackbarId = snackbar.show({
+					type: 'error',
+					message: 'เชื่อมต่อกับ FlowCode Agent ไม่ได้ กรุณาดาวน์โหลด/เปิด FlowCode Agent',
+					action: { label: 'ดาวน์โหลด', href: 'https://github.com/ArtronShop/flowcode-agent/releases' },
+					hideClose: true,
+				});
+			}
+		} else {
+			if (agentSnackbarId !== null) {
+				snackbar.close(agentSnackbarId);
+				agentSnackbarId = null;
+			}
+		}
+	});
+
 	// Merge board blocks + installed extension blocks (only installed extensions)
 	const boardCategories = $derived<BlockCategory[]>([
 		...selectedBoard.blocks,
@@ -62,7 +84,7 @@
 		const next = boards.find((b) => b.id === boardId);
 		if (!next || next.id === selectedBoard.id) return;
 		console.log('blockList', editor?.blockList());
-		if ((editor?.blockList().length ?? 0) > 0) {
+		/* if ((editor?.blockList().length ?? 0) > 0) {
 			confirmDialogOption = {
 				title: 'เปลี่ยนบอร์ด',
 				message: `เปลี่ยนเป็น "${next.name}" จะล้างบล็อกทั้งหมดในพื้นที่ทำงาน ยืนยันหรือไม่?`,
@@ -73,9 +95,10 @@
 				},
 			};
 			confirmDialogOpen = true;
-		} else {
+		} else { */
 			selectedBoard = next;
-		}
+		//}
+		handleEditorChange('project:load');
 	}
 
 	type SidePanel = 'files' | 'extensions' | 'help' | null;
@@ -258,6 +281,8 @@
 		}
 		// ─────────────────────────────────────────────────────────────────
 
+		if (!agentConnected) return;
+
 		isRunning = true;
 		runLogs = [];
 		// activeConsoleTab = 'run';
@@ -272,9 +297,6 @@
 			.flatMap((e) => e.depends as string[]);
 
 		try {
-			if (!agentConnected) {
-				throw new Error('ไม่สามารถเชื่อมต่อ FlowcodeAgent ได้ กรุณารอสักครู่แล้วลองใหม่');
-			}
 			agent.onStream = (p) => { runLogs = [...runLogs, p.data]; };
 
 			// 1. Install core (ครั้งแรกเท่านั้น)
@@ -326,8 +348,11 @@
 			if (serialConnectAfterUpload) {
 				setTimeout(toggleSerialConnect, 500); // wait port are ready again before connect
 			}
+
+			snackbar.show({ type: 'success', message: 'Run เสร็จสิ้น', autoClose: 5000 });
 		} catch (e: any) {
 			log(`❌ เกิดข้อผิดพลาด: ${e?.message ?? String(e)}`);
+			snackbar.show({ type: 'error', message: `Run ผิดพลาด: ${e?.message ?? String(e)}` });
 		} finally {
 			isRunning = false;
 		}
@@ -466,6 +491,8 @@
 	bind:open={confirmDialogOpen}
 	{...confirmDialogOption}
 />
+
+<Snackbar />
 
 <!-- Resize overlay: blocks all pointer events while dragging -->
 {#if isResizing}
