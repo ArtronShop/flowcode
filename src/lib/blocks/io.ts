@@ -141,7 +141,7 @@ export const ioCategory: BlockCategory = {
 					description: 'หมายเลขขา GPIO ที่ต้องการสลับสถานะ',
 					type: 'number',
 					label: 'Pin',
-					default: '2'
+					default: '5'
 				}
 			],
 			toCode({ pad, params, resolveInput }) {
