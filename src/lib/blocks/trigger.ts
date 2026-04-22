@@ -60,6 +60,7 @@ export const triggerCategory: BlockCategory = {
 						{ label: "every 1 hours", value: "60 * 60 * 1000" },
 						{ label: "Custom", value: "CUSTOM" },
 					],
+					default: '1 * 1000',
 					description: 'ช่วงเวลาที่ทำซ้ำ (1 วินาที ถึง 1 ชั่วโมง)'
 				},
 				{
