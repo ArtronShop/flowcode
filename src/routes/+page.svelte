@@ -46,6 +46,8 @@
 	let agentConnected = $state(false);
 	const installedCores = new Set<string>();
 	const installedLibs = new Set<string>();
+	let lastCompiledHash = '';
+	let lastCompiledFqbn = '';
 	let availablePorts = $state<string[]>([]);
 	let selectedPort = $state('');
 
@@ -260,6 +262,11 @@
 		}
 	}
 
+	async function hashCode(code: string): Promise<string> {
+		const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code));
+		return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+	}
+
 	async function runProject() {
 		if (isRunning) return;
 
@@ -322,15 +329,22 @@
 				log(`⏭ ข้าม library (ติดตั้งแล้วทั้งหมด)`);
 			}
 
-			// 3. Write sketch
-			log(`📝 เขียน sketch: ${sketchName}`);
-			await agent.writeSketch(sketchName, code);
-			log('✅ เขียน sketch สำเร็จ');
+			// 3 & 4. Write + Compile (ข้ามถ้าโค้ดและ board เหมือนเดิม)
+			const currentHash = await hashCode(code);
+			if (currentHash === lastCompiledHash && board.fqbn === lastCompiledFqbn) {
+				log(`⏭ ข้าม write & compile (โค้ดเหมือนรอบที่แล้ว)`);
+			} else {
+				log(`📝 เขียน sketch: ${sketchName}`);
+				await agent.writeSketch(sketchName, code);
+				log('✅ เขียน sketch สำเร็จ');
 
-			// 4. Compile
-			log(`🔨 กำลัง compile (${board.fqbn})...`);
-			await agent.compile(sketchName, board.fqbn);
-			log('✅ Compile สำเร็จ');
+				log(`🔨 กำลัง compile (${board.fqbn})...`);
+				await agent.compile(sketchName, board.fqbn);
+				log('✅ Compile สำเร็จ');
+
+				lastCompiledHash = currentHash;
+				lastCompiledFqbn = board.fqbn;
+			}
 
 			// Disconnect Serial Port before upload
 			let serialConnectAfterUpload = false;
