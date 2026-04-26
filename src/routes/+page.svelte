@@ -49,7 +49,11 @@
 	let lastCompiledHash = '';
 	let lastCompiledFqbn = '';
 	let availablePorts = $state<string[]>([]);
-	let selectedPort = $state('');
+	let selectedPort = $state(localStorage.getItem('lastSelectedPort') ?? '');
+
+	$effect(() => {
+		if (selectedPort) localStorage.setItem('lastSelectedPort', selectedPort);
+	});
 
 	agent.onConnect = () => { agentConnected = true; };
 	agent.onDisconnect = () => { agentConnected = false; };
