@@ -11,6 +11,7 @@ import ioxesp32ps from './ioxesp32ps';
 import ioxesp32c6 from './ioxesp32c6';
 
 // High Level board
+import atd35s3farm1 from './atd35s3farm1';
 import espobd2 from './espobd2';
 import tinker_c6 from './tinker_c6';
 import esphub75 from './esphub75';
@@ -24,6 +25,7 @@ const boards: BoardItem[] = [
     ioxesp32,
     ioxesp32ps,
     ioxesp32c6,
+    atd35s3farm1,
     espobd2,
     tinker_c6,
     esphub75,
