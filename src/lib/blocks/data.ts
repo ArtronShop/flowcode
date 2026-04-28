@@ -197,10 +197,29 @@ export const dataCategory: BlockCategory = {
 			}
 		},
 		{
+			id: 'string_to_int',
+			name: 'String to Int',
+			color: '#f97316',
+			icon: 'i',
+			category: 'data',
+			description: 'แปลงข้อมูลข้อความ (String) เป็นตัวเลข',
+			inputs: [{ id: 'in', type: 'input', label: 'In', dataType: 'String' }],
+			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'int' }],
+			toCode({ block, pad, safeId, resolveInput }) {
+				const src = resolveInput('in') ?? '""';
+				return {
+					parts: [
+						[`${pad}int ${safeId(block.id)} = String(${src}).toInt();`],
+						{ portId: 'out', depthDelta: 0 }
+					]
+				};
+			}
+		},
+		{
 			id: 'string_to_float',
 			name: 'String to Float',
 			color: '#f97316',
-			icon: 'i',
+			icon: 'f',
 			category: 'data',
 			description: 'แปลงข้อมูลข้อความ (String) เป็นตัวเลข',
 			inputs: [{ id: 'in', type: 'input', label: 'In', dataType: 'String' }],
