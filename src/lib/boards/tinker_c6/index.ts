@@ -8,7 +8,7 @@ const tinker_c6: BoardItem = {
     name: 'Tinker C6',
     image: '',
     fqbn: 'esp32:esp32:esp32c6:CDCOnBoot=cdc',
-    depends: [ 'Tinker C6@1.0.1', 'ModbusMaster@2.0.1' ],
+    depends: [ 'Tinker C6@1.0.1', 'ModbusMasterPlus@2.1.0' ],
     blocks: [
         ...blockCategories,
     ]

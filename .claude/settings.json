@@ -11,7 +11,8 @@
       "Bash(echo \"EXIT:$?\")",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('svelte:', p.dependencies?.svelte || p.devDependencies?.svelte\\)\")"
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('svelte:', p.dependencies?.svelte || p.devDependencies?.svelte\\)\")",
+      "WebSearch"
     ],
     "additionalDirectories": [
       "c:\\Users\\sonth\\GitHub\\ui-click\\src\\lib"
