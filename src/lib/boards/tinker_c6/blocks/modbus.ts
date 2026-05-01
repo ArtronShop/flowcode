@@ -14,7 +14,7 @@ function registerModbusInstance(
     registerGlobal: (d: string) => void,
 ) {
     registerPreprocessor('#include <TinkerC6.h>');
-    registerPreprocessor('#include <ModbusMaster.h>');
+    registerPreprocessor('#include <ModbusMasterPlus.h>');
     registerGlobal(`ModbusMaster modbus;`);
 }
 
