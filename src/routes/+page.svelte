@@ -472,6 +472,15 @@
 		localStorage.setItem('installed-extensions', JSON.stringify(ids));
 	});
 
+	function installExtension(ext: ExtensionItem) {
+		ext.installed = true;
+		// TODO: fix extension block conflict board block
+		/* for (const reqId of ext.requires ?? []) {
+			const dep = extensions.find((e) => e.id === reqId);
+			if (dep && !dep.installed) dep.installed = true;
+		} */
+	}
+
 	$effect(() => {
 		localStorage.setItem('side-panel', activePanel ?? '');
 	});
@@ -780,7 +789,7 @@
 											</button>
 										{:else}
 											<button
-												onclick={() => ext.installed = true}
+												onclick={() => installExtension(ext)}
 												class="flex items-center gap-1 rounded bg-blue-600/20 px-2 py-1 text-[10px] text-blue-400 transition-colors hover:bg-blue-600/40 hover:text-blue-300"
 											>
 												<Download size={11} />ติดตั้ง
@@ -818,7 +827,7 @@
 											</button>
 										{:else}
 											<button
-												onclick={() => ext.installed = true}
+												onclick={() => installExtension(ext)}
 												class="flex items-center gap-1 rounded bg-blue-600/20 px-2 py-1 text-[10px] text-blue-400 transition-colors hover:bg-blue-600/40 hover:text-blue-300"
 											>
 												<Download size={11} />ติดตั้ง

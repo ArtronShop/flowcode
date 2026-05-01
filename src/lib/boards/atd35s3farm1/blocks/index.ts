@@ -1,5 +1,5 @@
 // Block build-in
-// import { triggerCategory } from '$lib/blocks/trigger';
+import { triggerCategory } from '$lib/blocks/trigger';
 // import { ioCategory } from '$lib/blocks/io';
 import { controlCategory } from '$lib/blocks/control';
 import { dataCategory } from '$lib/blocks/data';
@@ -18,16 +18,19 @@ import { webserverCategory } from '$lib/blocks/webserver';
 import { espnowCategory } from '$lib/blocks/espnow';
 
 // Board blocks
-import { triggerCategory } from './trigger';
+import { timeCategory } from './time';
 import { handysenseCategory } from './handysense';
 import { ioCategory } from './io';
 import { modbusCategory } from './modbus';
+import { cardCategory } from './card';
 
 export const blockCategories = [
     triggerCategory,
     handysenseCategory,
+    timeCategory,
     ioCategory,
     modbusCategory,
+    cardCategory,
     controlCategory,
     dataCategory,
     variableCategory,

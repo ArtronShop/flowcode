@@ -16,7 +16,7 @@ const atd35s3farm1: BoardItem = {
         'NTPClient@3.2.1', 
         'PubSubClient@2.8', 
         'ATD3.5-S3_HandySense_Arduino_Library@1.0.0',
-        'ModbusMaster@2.0.1',
+        'ModbusMasterPlus@2.1.1',
     ],
     blocks: [
         ...blockCategories,

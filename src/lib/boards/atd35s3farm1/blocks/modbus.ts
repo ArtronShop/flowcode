@@ -14,7 +14,7 @@ function registerModbusInstance(
     registerGlobal: (d: string) => void,
     registerFunction: (h: string, b: string, decl?: string) => void,
 ) {
-    registerPreprocessor('#include <ModbusMaster.h>');
+    registerPreprocessor('#include <ModbusMasterPlus.h>');
     registerGlobal(`ModbusMaster modbus;`);
     registerGlobal(`HardwareSerial* modbus_serial = nullptr;`);
 }
