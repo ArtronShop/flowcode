@@ -38,7 +38,7 @@ export const variableCategory: BlockCategory = {
 			toCode({ pad, resolveInput, params, registerGlobal }) {
 				const name = params.name || 'myInt';
 				const init = params.init || '0';
-				registerGlobal(`int ${name} = ${init};`);
+				registerGlobal(`static int ${name} = ${init};`);
 				const value = resolveInput('value') ?? init;
 				return {
 					parts: [
@@ -83,7 +83,7 @@ export const variableCategory: BlockCategory = {
 				const name = params.name || 'myFloat';
 				const rawInit = params.init || '0.0';
 				const initLit = rawInit.includes('.') ? `${rawInit}f` : `${rawInit}.0f`;
-				registerGlobal(`float ${name} = ${initLit};`);
+				registerGlobal(`static float ${name} = ${initLit};`);
 				const value = resolveInput('value') ?? initLit;
 				return {
 					parts: [
@@ -127,7 +127,7 @@ export const variableCategory: BlockCategory = {
 			toCode({ pad, resolveInput, params, registerGlobal }) {
 				const name = params.name || 'myString';
 				const initEscaped = (params.init ?? '').replaceAll('"', '\\"');
-				registerGlobal(`String ${name} = "${initEscaped}";`);
+				registerGlobal(`static String ${name} = "${initEscaped}";`);
 				const value = resolveInput('value') ?? `"${initEscaped}"`;
 				return {
 					parts: [
@@ -179,7 +179,7 @@ export const variableCategory: BlockCategory = {
 			toCode({ pad, resolveInput, params, registerGlobal }) {
 				const name = params.name || 'myBool';
 				const init = params.init === 'true' ? 'true' : 'false';
-				registerGlobal(`bool ${name} = ${init};`);
+				registerGlobal(`static bool ${name} = ${init};`);
 				const value = resolveInput('value') ?? init;
 				return {
 					parts: [
