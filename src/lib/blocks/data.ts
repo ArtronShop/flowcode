@@ -178,6 +178,52 @@ export const dataCategory: BlockCategory = {
 			}
 		},
 		{
+			id: 'map_range',
+			name: 'Map Range',
+			color: '#14b8a6',
+			icon: '📏',
+			category: 'data',
+			inputs: [{ id: 'value', type: 'input', label: 'Value', dataType: 'any' }],
+			outputs: [],
+			params: [
+				{
+					id: 'data_type', label: 'Data Type', type: 'option', options: [
+						{ label: 'int', value: 'int' },
+						{ label: 'long', value: 'long' },
+						{ label: 'float', value: 'float' },
+					], default: 'int'
+				},
+				{ id: 'from_lo', label: 'from Low', type: 'number', default: '0' },
+				{ id: 'from_hi', label: 'from High', type: 'number', default: '255' },
+				{ id: 'to_lo', label: 'to Low', type: 'number', default: '0' },
+				{ id: 'to_hi', label: 'to High', type: 'number', default: '100' },
+			],
+			dynamicPorts: params => ({
+				outputs: [
+					{ id: 'result', type: 'output', label: 'Result', dataType: params.data_type }
+				]
+			}),
+			toCode({ block, pad, safeId, resolveInput, params }) {
+				const id = safeId(block.id);
+				const value = resolveInput('value') ?? '0';
+				const data_type = params?.data_type ?? 'int';
+				const from_lo = params?.from_lo || '0';
+				const from_hi = params?.from_hi || '255';
+				const to_lo = params?.to_lo || '0';
+				const to_hi = params?.to_hi || '100';
+				// map() returns long (integer only) — use linear formula for float
+				const expr = data_type === 'float'
+					? `(float)(${value} - (${from_lo})) * ((${to_hi}) - (${to_lo})) / ((${from_hi}) - (${from_lo})) + (${to_lo})`
+					: `(${data_type})map(${value}, ${from_lo}, ${from_hi}, ${to_lo}, ${to_hi})`;
+				return {
+					parts: [
+						[`${pad}${data_type} ${id} = ${expr};`],
+						{ portId: 'result', depthDelta: 0 }
+					]
+				};
+			}
+		},
+		{
 			id: 'to_string',
 			name: 'To String',
 			color: '#f97316',
