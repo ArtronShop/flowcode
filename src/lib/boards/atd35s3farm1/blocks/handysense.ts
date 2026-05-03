@@ -25,6 +25,7 @@ export const handysenseCategory: BlockCategory = {
 
 				return {
 					parts: [
+						[`${pad}Serial.begin(115200);`],
 						[`${pad}HandySense_init(); // Init HandySense, MQTT, WiFi Manager`],
 						[`${pad}UI_init(); // Init LVGL and UI`],
 						{ portId: 'out', depthDelta: 0 },
