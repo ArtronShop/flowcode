@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import FlowEditor, { type FlowEditorEvent } from '$lib/flowcode/FlowEditor.svelte';
 	import ConfirmDialog, { type ConfirmOptions } from '$lib/components/ConfirmDialog.svelte';
+	import ShareDialog from '$lib/components/ShareDialog.svelte';
 	import Snackbar from '$lib/components/Snackbar.svelte';
 	import { snackbar } from '$lib/components/snackbar.svelte.js';
 	import Dropdown from '$lib/components/Dropdown.svelte';
@@ -15,8 +16,7 @@
 		Files, Puzzle, CircleQuestionMark,
 		ArrowLeft, X, Download, Trash2, CircleCheck,
 		Cpu, Usb, Wifi, WifiOff, ChevronsDown, LoaderCircle, CircleStop,
-        ChevronRight,
-        MessageCircle,
+        ChevronRight, MessageCircle, Share2, ExternalLink,
 	} from 'lucide-svelte';
 
 	import type { ExtensionProps } from '$lib/blocks/extension/types';
@@ -26,6 +26,49 @@
 	type ExtensionItem = ExtensionProps & {
 		installed: boolean;
 	};
+
+	// ── Embed / Share ────────────────────────────────────────────────────
+	const _urlParams   = new URLSearchParams(window.location.search);
+	const isEmbed      = _urlParams.has('embed');
+	const openParam    = _urlParams.get('open');
+
+	let shareDialogOpen = $state(false);
+	let shareUrl        = $state('');
+
+	async function _compress(str: string): Promise<string> {
+		const bytes = new TextEncoder().encode(str);
+		const cs = new CompressionStream('deflate-raw');
+		const w  = cs.writable.getWriter();
+		w.write(bytes); w.close();
+		const buf = await new Response(cs.readable).arrayBuffer();
+		// URL-safe base64 (Base64URL): replace + → - and / → _ , drop = padding
+		return btoa(String.fromCharCode(...new Uint8Array(buf)))
+			.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+	}
+	async function _decompress(b64: string): Promise<string> {
+		// Restore standard base64 from URL-safe form and re-add padding
+		const std    = b64.replace(/-/g, '+').replace(/_/g, '/');
+		const padded = std + '='.repeat((4 - std.length % 4) % 4);
+		const bytes  = Uint8Array.from(atob(padded), c => c.charCodeAt(0));
+		const ds = new DecompressionStream('deflate-raw');
+		const w  = ds.writable.getWriter();
+		w.write(bytes); w.close();
+		return new Response(ds.readable).text();
+	}
+
+	async function openShareDialog() {
+		const payload = JSON.stringify({
+			v:          1,
+			board:      selectedBoard.id,
+			extensions: extensions.filter(e => e.installed).map(e => e.id),
+			flow:       editor?.exportJson() ?? '',
+		});
+		const b64    = await _compress(payload);
+		const origin = `${window.location.origin}${window.location.pathname}`;
+		shareUrl     = `${origin}?open=${b64}`;
+		shareDialogOpen = true;
+	}
+	// ─────────────────────────────────────────────────────────────────────
 
 	let extensions = $state<ExtensionItem[]>(extensionIndex.map((e) => ({ ...e, installed: false })));
 	let extensionSearch = $state('');
@@ -419,27 +462,46 @@
 		}
 	}
 
-	// Auto load project from Local Storage
-	onMount(() => {
-		// Load board select from local storage
-		const selectedBoardId = localStorage.getItem('board-select');
-		if (selectedBoardId) { 
-			const next = boards.find((b) => b.id === selectedBoardId);
-			if (next) {
-				selectedBoard = next;
+	// Auto load project from Local Storage or ?open= URL param
+	onMount(async () => {
+		if (openParam) {
+			// Set shareUrl so embed's 'Open in new window' button works immediately
+			const origin = `${window.location.origin}${window.location.pathname}`;
+			shareUrl = `${origin}?open=${openParam}`;
+			// ── Load from shared URL ───────────────────────────────────
+			try {
+				const json = await _decompress(openParam);
+				const data = JSON.parse(json) as { v: number; board: string; extensions: string[]; flow: string };
+				const board = boards.find(b => b.id === data.board);
+				if (board) selectedBoard = board;
+				if (data.extensions) {
+					const ids = new Set(data.extensions);
+					extensions = extensions.map(e => ({ ...e, installed: ids.has(e.id) }));
+				}
+				if (data.flow) editor?.importJson(data.flow);
+			} catch (e) {
+				console.error('Failed to load from ?open param', e);
+				snackbar.show({ type: 'error', message: 'โหลด workflow จาก URL ไม่สำเร็จ' });
 			}
-		}
+		} else {
+			// ── Load board select from local storage ───────────────────
+			const selectedBoardId = localStorage.getItem('board-select');
+			if (selectedBoardId) {
+				const next = boards.find((b) => b.id === selectedBoardId);
+				if (next) selectedBoard = next;
+			}
 
-		// Restore installed extensions
-		const savedExtIds = localStorage.getItem('installed-extensions');
-		if (savedExtIds) {
-			const ids = new Set(JSON.parse(savedExtIds) as string[]);
-			extensions = extensions.map((e) => ({ ...e, installed: ids.has(e.id) }));
-		}
+			// Restore installed extensions
+			const savedExtIds = localStorage.getItem('installed-extensions');
+			if (savedExtIds) {
+				const ids = new Set(JSON.parse(savedExtIds) as string[]);
+				extensions = extensions.map((e) => ({ ...e, installed: ids.has(e.id) }));
+			}
 
-		// Load flow from local storage
-		const saved = localStorage.getItem('flowcode-project');
-		if (saved) editor?.importJson(saved);
+			// Load flow from local storage
+			const saved = localStorage.getItem('flowcode-project');
+			if (saved) editor?.importJson(saved);
+		}
 
 		const savedTab = localStorage.getItem('console-tab');
 		activeConsoleTab = (savedTab === 'code' || savedTab === 'run' || savedTab === 'serial') ? savedTab : null;
@@ -519,6 +581,8 @@
 	{...confirmDialogOption}
 />
 
+<ShareDialog bind:open={shareDialogOpen} {shareUrl} />
+
 <Snackbar />
 
 <!-- Resize overlay: blocks all pointer events while dragging -->
@@ -542,6 +606,7 @@
 				FlowCode
 			</span>
 
+			{#if !isEmbed}
 			<!-- New Project -->
 			<button
 				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
@@ -561,6 +626,7 @@
 				<FolderOpen size={16} />
 				<span class="hidden sm:inline">Open</span>
 			</button>
+			{/if}
 
 			<!-- Save Project -->
 			<button
@@ -614,6 +680,7 @@
 				<span>{isRunning ? 'Running...' : 'Run'}</span>
 			</button>
 
+			{#if !isEmbed}
 			<button
 				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
 				onclick={() => activeConsoleTab = "serial"}
@@ -622,9 +689,40 @@
 				<Terminal size={16} />
 				<span>Serial Monitor</span>
 			</button>
+
+			<!-- Share -->
+			<div class="mx-1 h-5 w-px bg-gray-700"></div>
+			<button
+				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+				title="แชร์"
+				onclick={() => openShareDialog()}
+			>
+				<Share2 size={16} />
+				<span class="hidden sm:inline">Share</span>
+			</button>
+			{:else}
+			<!-- Embed: Open in new window -->
+			<a
+				href={shareUrl || '#'}
+				target="_blank"
+				rel="noopener noreferrer"
+				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+				title="เปิดในหน้าต่างใหม่"
+				onclick={async (e) => {
+					if (!shareUrl) {
+						e.preventDefault();
+						await openShareDialog();
+					}
+				}}
+			>
+				<ExternalLink size={16} />
+				<span>เปิดในหน้าต่างใหม่</span>
+			</a>
+			{/if}
 		</div>
 
 		<!-- User Avatar -->
+		{#if !isEmbed}
 		<div class="relative">
 			<button
 				onclick={(e) => { e.stopPropagation(); showUserMenu = !showUserMenu; }}
@@ -668,11 +766,13 @@
 				</div>
 			{/if}
 		</div>
+		{/if}
 	</header>
 
 	<!-- ─── Main area (sidebar + editor) ──────────────────────────── -->
 	<div class="flex flex-1 overflow-hidden">
 
+		{#if !isEmbed}
 		<!-- ── Icon rail ───────────────────────────────────────────── -->
 		<nav class="flex w-12 flex-col shrink-0 items-center gap-1 border-r border-gray-700/60 bg-gray-900 py-2">
 			<button
@@ -1011,16 +1111,19 @@
 				</div>
 			</div>
 		{/if}
+		{/if}
 		
 		<div class="flex min-h-0 min-w-0 flex-col grow">
 			<!-- ── FlowEditor ───────────────────────────────────────────── -->
 			<FlowEditor
 				bind:this={editor}
 				categories={boardCategories}
+				embed={isEmbed}
 				onchange={handleEditorChange}
 				onhelp={openBlockHelp}
 			/>
 
+			{#if !isEmbed}
 			<!-- ─── Bottom Console Panel ───────────────────────────────────── -->
 			{#if activeConsoleTab !== null}
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -1176,9 +1279,12 @@
 					{/if}
 				</div>
 			{/if}
+			{/if}
+
 		</div>
 	</div>
 
+	{#if !isEmbed}
 	<!-- ─── Status bar ──────────────────────────────────────────────── -->
 	<footer class="flex items-center gap-4 border-t border-gray-800 bg-gray-900 px-4 py-1 text-[10px] text-gray-600">
 		<span>Block: <span class="text-gray-400">{status?.blockCount ?? 0}</span></span>
@@ -1206,4 +1312,5 @@
 			<span>Console</span>
 		</button>
 	</footer>
+	{/if}
 </div>

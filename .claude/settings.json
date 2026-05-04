@@ -12,7 +12,10 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('svelte:', p.dependencies?.svelte || p.devDependencies?.svelte\\)\")",
-      "WebSearch"
+      "WebSearch",
+      "Bash(python3 -c ' *)",
+      "Bash(python3)",
+      "Bash(npm install *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\sonth\\GitHub\\ui-click\\src\\lib"

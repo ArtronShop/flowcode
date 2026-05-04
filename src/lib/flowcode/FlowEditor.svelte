@@ -20,6 +20,8 @@
 	interface Props {
 		/** หมวดหมู่บล็อกที่แสดงในแผง Palette (default: ทุก category) */
 		categories?: BlockCategory[];
+		/** ซ่อน Block Palette (สำหรับ embed mode) */
+		embed?: boolean;
 		/** เรียกทุกครั้งที่ state เปลี่ยน */
 		onchange?: (event: FlowEditorEvent) => void;
 		onhelp?: (blockInfo: BlockDef) => void;
@@ -41,7 +43,7 @@
 		| 'project:clear'
 		| 'zoom';
 
-	let { categories = [], onchange, onhelp }: Props = $props();
+	let { categories = [], embed = false, onchange, onhelp }: Props = $props();
 
 	/** map จาก typeId → BlockDef ที่ใช้งานอยู่ */
 	const defMap = $derived<Record<string, BlockDef>>(
@@ -1157,7 +1159,7 @@
 	</div>
 
 	<!-- ── Right Panel: Block Palette ────────────────────────────── -->
-	<aside class="flex w-60 flex-col border-l border-gray-700/60 bg-gray-900">
+	<aside class="flex w-60 flex-col border-l border-gray-700/60 bg-gray-900 {embed ? 'hidden!' : ''}">
 		<div class="border-b border-gray-700/60 px-3 py-3">
 			<div class="relative">
 				<svg class="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

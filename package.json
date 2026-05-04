@@ -41,7 +41,9 @@
 	},
 	"dependencies": {
 		"@tauri-apps/api": "^2.10.1",
+		"@types/qrcode": "^1.5.6",
 		"lucide-svelte": "^1.0.1",
+		"qrcode": "^1.5.4",
 		"shiki": "^4.0.2"
 	}
 }
