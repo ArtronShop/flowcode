@@ -73,8 +73,8 @@ export const handysenseCategory: BlockCategory = {
 			name: 'Sensor Value Response',
 			color: COLOR_UI,
 			icon: '✅',
-			category: 'RGBMatrix',
-			description: 'เติมหน้าจอทั้งหมดด้วยสีที่กำหนด\nใช้ Matrix Color RGB เพื่อสร้างค่าสี 16-bit',
+			category: 'handysense',
+			description: 'ตอบกลับค่าเซ็นเซอร์ไปยัง HandySense\nใช้ภายใน On Sensor Request เท่านั้น',
 			inputs: [{ id: 'value', type: 'input', label: 'Value', dataType: 'float' }],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void' }],
 			toCode({ pad, resolveInput }) {
@@ -95,8 +95,8 @@ export const handysenseCategory: BlockCategory = {
 			name: 'Sensor Error Response',
 			color: COLOR_UI,
 			icon: '⚠️',
-			category: 'RGBMatrix',
-			description: 'เติมหน้าจอทั้งหมดด้วยสีที่กำหนด\nใช้ Matrix Color RGB เพื่อสร้างค่าสี 16-bit',
+			category: 'handysense',
+			description: 'แจ้งว่าอ่านค่าเซ็นเซอร์ไม่สำเร็จ\nใช้ภายใน On Sensor Request เท่านั้น',
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any' }],
 			outputs: [{ id: 'out', type: 'output', label: '➜', dataType: 'void' }],
 			toCode({ pad }) {
