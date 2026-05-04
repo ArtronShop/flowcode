@@ -3,6 +3,7 @@ import { triggerCategory } from '$lib/blocks/trigger';
 // import { ioCategory } from '$lib/blocks/io';
 import { controlCategory } from '$lib/blocks/control';
 import { dataCategory } from '$lib/blocks/data';
+import { stringCategory } from '$lib/blocks/string';
 import { variableCategory } from '$lib/blocks/variable';
 import { serialCategory } from '$lib/blocks/serial';
 import { functionCategory } from '$lib/blocks/function';
@@ -23,16 +24,19 @@ import { handysenseCategory } from './handysense';
 import { ioCategory } from './io';
 import { modbusCategory } from './modbus';
 import { cardCategory } from './card';
+import { farmCalcCategory } from './farm_calc';
 
 export const blockCategories = [
     triggerCategory,
     handysenseCategory,
+    farmCalcCategory,
     timeCategory,
     ioCategory,
     modbusCategory,
     cardCategory,
     controlCategory,
     dataCategory,
+    stringCategory,
     variableCategory,
     serialCategory,
     functionCategory,
