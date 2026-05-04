@@ -1,25 +1,5 @@
 import type { BlockCategory } from './types.js';
 
-/** คืน array ของ specifier character ตามลำดับ (เช่น ['d', 's', 'f']) ไม่นับ %% */
-function getPrintfSpecifiers(format: string): string[] {
-	const matches = format.match(/%%|%[-+0 #]*(?:\*|\d+)?(?:\.(?:\*|\d+))?(?:hh?|ll?|[ljztL])?[diouxXeEfgGaAcspn]/g) ?? [];
-	return matches.filter(m => m !== '%%').map(m => m[m.length - 1]);
-}
-
-/** แปลง specifier character เป็น Arduino dataType */
-function specifierToDataType(spec: string): string {
-	if ('diouxX'.includes(spec)) return 'int';
-	if ('eEfgGaA'.includes(spec)) return 'float';
-	if (spec === 's') return 'String';
-	if (spec === 'c') return 'char';
-	return 'any';
-}
-
-/** ห่อ arg ด้วย String(...).c_str() เฉพาะ specifier %s เพื่อรองรับ Arduino String */
-function wrapPrintfArgs(args: string[], specs: string[]): string[] {
-	return args.map((a, i) => specs[i] === 's' ? `String(${a}).c_str()` : a);
-}
-
 export const dataCategory: BlockCategory = {
 	name: 'Data',
 	blocks: [
@@ -223,137 +203,266 @@ export const dataCategory: BlockCategory = {
 				};
 			}
 		},
+		// ── Constrain ────────────────────────────────────────────────────────
 		{
-			id: 'to_string',
-			name: 'To String',
-			color: '#f97316',
-			icon: 'a',
+			id: 'constrain',
+			name: 'Constrain',
+			color: '#14b8a6',
+			icon: '⊞',
 			category: 'data',
-			description: 'แปลงข้อมูลตัวเลข / Bool เป็นข้อความ (String)',
-			inputs: [{ id: 'in', type: 'input', label: 'In', dataType: 'any' }],
-			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'String' }],
-			toCode({ block, pad, safeId, resolveInput }) {
-				const src = resolveInput('in') ?? '""';
-				return {
-					parts: [
-						[`${pad}String ${safeId(block.id)} = String(${src});`],
-						{ portId: 'out', depthDelta: 0 }
-					]
-				};
-			}
-		},
-		{
-			id: 'string_to_int',
-			name: 'String to Int',
-			color: '#f97316',
-			icon: 'i',
-			category: 'data',
-			description: 'แปลงข้อมูลข้อความ (String) เป็นตัวเลข',
-			inputs: [{ id: 'in', type: 'input', label: 'In', dataType: 'String' }],
-			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'int' }],
-			toCode({ block, pad, safeId, resolveInput }) {
-				const src = resolveInput('in') ?? '""';
-				return {
-					parts: [
-						[`${pad}int ${safeId(block.id)} = String(${src}).toInt();`],
-						{ portId: 'out', depthDelta: 0 }
-					]
-				};
-			}
-		},
-		{
-			id: 'string_to_float',
-			name: 'String to Float',
-			color: '#f97316',
-			icon: 'f',
-			category: 'data',
-			description: 'แปลงข้อมูลข้อความ (String) เป็นตัวเลข',
-			inputs: [{ id: 'in', type: 'input', label: 'In', dataType: 'String' }],
-			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'float' }],
-			toCode({ block, pad, safeId, resolveInput }) {
-				const src = resolveInput('in') ?? '""';
-				return {
-					parts: [
-						[`${pad}float ${safeId(block.id)} = String(${src}).toFloat();`],
-						{ portId: 'out', depthDelta: 0 }
-					]
-				};
-			}
-		},
-		{
-			id: 'string_combine',
-			name: 'String Combine',
-			color: '#f97316',
-			icon: '"+',
-			category: 'data',
-			description: 'รวมข้อความ/ตัวเลขเป็นข้อความเดียว',
-			inputs: [
-				{ id: 'in1', type: 'input', label: 'In 1', dataType: 'any' },
-				{ id: 'in2', type: 'input', label: 'In 2', dataType: 'any' }
-			],
-			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'String' }],
-			params: [{ id: 'count', type: 'number', label: 'จำนวน', default: '2', validation: (n: number) => Math.max(2, Math.min(10, n)), description: 'จำนวนข้อความที่ต้องการรวม (2–10)' }],
-			dynamicPorts({ count }) {
-				const n = Math.max(2, Math.min(10, parseInt(count) || 2));
-				return {
-					inputs: Array.from({ length: n }, (_, i) => ({
-						id: `in${i + 1}`, type: 'input' as const, label: `In ${i + 1}`, dataType: 'any' as const
-					}))
-				};
-			},
-			toCode({ block, pad, safeId, resolveInput, params }) {
-				const n = Math.max(2, Math.min(10, parseInt(params.count) || 2));
-				const src = Array.from({ length: n }, (_, i) => resolveInput(`in${i + 1}`) ?? '""');
-				return {
-					parts: [
-						[`${pad}String ${safeId(block.id)} = ${src.map(a => `String(${a})`).join(' + ')};`],
-						{ portId: 'out', depthDelta: 0 }
-					]
-				};
-			}
-		},
-		{
-			id: 'string_format',
-			name: 'String Format',
-			color: '#f97316',
-			icon: '"%',
-			category: 'data',
-			description: 'จัดรูปแบบข้อความตาม format ของ printf ภาษา C เช่น "Temp: %.1f°C, Val: %d" จะแปลงผ่าน C string (char[]) ก่อน แล้วค่อยแปลงเป็น String',
-			inputs: [],
-			outputs: [{ id: 'out', type: 'output', label: 'Out', dataType: 'String' }],
+			description: 'จำกัดค่าให้อยู่ในช่วง [lo, hi] — constrain(value, lo, hi)',
+			inputs: [{ id: 'value', type: 'input', label: 'Value', dataType: 'any' }],
+			outputs: [],
 			params: [
-				{ id: 'format', type: 'text', label: 'Format', default: 'Value=%d', description: 'รูปแบบ printf เช่น "Temp: %.1f" หรือ "Count: %d, Name: %s" (จำนวน input จะปรับตาม specifier อัตโนมัติ)' }
+				{
+					id: 'data_type', label: 'Type', type: 'option', default: 'int',
+					options: [{ label: 'int', value: 'int' }, { label: 'long', value: 'long' }, { label: 'float', value: 'float' }],
+				},
+				{ id: 'lo', label: 'Min', type: 'number', default: '0' },
+				{ id: 'hi', label: 'Max', type: 'number', default: '100' },
 			],
-			dynamicPorts({ format }) {
-				const specs = getPrintfSpecifiers(format ?? '%d');
+			dynamicPorts: params => ({ outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: params.data_type ?? 'int' }] }),
+			toCode({ block, pad, safeId, resolveInput, params }) {
+				const id = safeId(block.id);
+				const v  = resolveInput('value') ?? '0';
+				const t  = params.data_type ?? 'int';
+				return { parts: [[`${pad}${t} ${id} = (${t})constrain(${v}, ${params.lo ?? '0'}, ${params.hi ?? '100'});`], { portId: 'result', depthDelta: 0 }] };
+			}
+		},
+		// ── Abs ──────────────────────────────────────────────────────────────
+		{
+			id: 'abs_value',
+			name: 'Abs',
+			color: '#14b8a6',
+			icon: '|x|',
+			category: 'data',
+			description: 'ค่าสัมบูรณ์ — abs(value)',
+			inputs: [{ id: 'value', type: 'input', label: 'Value', dataType: 'any' }],
+			outputs: [],
+			params: [
+				{
+					id: 'data_type', label: 'Type', type: 'option', default: 'int',
+					options: [{ label: 'int', value: 'int' }, { label: 'long', value: 'long' }, { label: 'float', value: 'float' }],
+				},
+			],
+			dynamicPorts: params => ({ outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: params.data_type ?? 'int' }] }),
+			toCode({ block, pad, safeId, resolveInput, params }) {
+				const id = safeId(block.id);
+				const v  = resolveInput('value') ?? '0';
+				const t  = params.data_type ?? 'int';
+				const fn = t === 'float' ? 'fabsf' : 'abs';
+				return { parts: [[`${pad}${t} ${id} = (${t})${fn}(${v});`], { portId: 'result', depthDelta: 0 }] };
+			}
+		},
+		// ── Min / Max ─────────────────────────────────────────────────────────
+		{
+			id: 'min_max',
+			name: 'Min / Max',
+			color: '#14b8a6',
+			icon: '⇅',
+			category: 'data',
+			description: 'ค่าน้อยสุดหรือมากสุดระหว่างสองค่า — min(a, b) / max(a, b)',
+			inputs: [
+				{ id: 'a', type: 'input', label: 'A', dataType: 'any' },
+				{ id: 'b', type: 'input', label: 'B', dataType: 'any' },
+			],
+			outputs: [],
+			params: [
+				{
+					id: 'fn', label: 'Function', type: 'option', default: 'min',
+					options: [{ label: 'min(A, B)', value: 'min' }, { label: 'max(A, B)', value: 'max' }],
+				},
+				{
+					id: 'data_type', label: 'Type', type: 'option', default: 'int',
+					options: [{ label: 'int', value: 'int' }, { label: 'long', value: 'long' }, { label: 'float', value: 'float' }],
+				},
+			],
+			dynamicPorts: params => ({ outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: params.data_type ?? 'int' }] }),
+			toCode({ block, pad, safeId, resolveInput, params }) {
+				const id = safeId(block.id);
+				const a  = resolveInput('a') ?? '0';
+				const b  = resolveInput('b') ?? '0';
+				const t  = params.data_type ?? 'int';
+				const fn = params.fn ?? 'min';
+				return { parts: [[`${pad}${t} ${id} = (${t})${fn}(${a}, ${b});`], { portId: 'result', depthDelta: 0 }] };
+			}
+		},
+		// ── Math Function ─────────────────────────────────────────────────────
+		{
+			id: 'math_func',
+			name: 'Math Function',
+			color: '#14b8a6',
+			icon: '𝑓(x)',
+			category: 'data',
+			description: 'ฟังก์ชันคณิตศาสตร์ — sqrt, pow, round, floor, ceil, log',
+			inputs: [],
+			outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: 'float' }],
+			params: [
+				{
+					id: 'fn', label: 'Function', type: 'option', default: 'sqrt',
+					options: [
+						{ label: 'sqrt(x)',    value: 'sqrt'  },
+						{ label: 'pow(x, exp)', value: 'pow'  },
+						{ label: 'round(x)',   value: 'round' },
+						{ label: 'floor(x)',   value: 'floor' },
+						{ label: 'ceil(x)',    value: 'ceil'  },
+						{ label: 'log(x)',     value: 'log'   },
+						{ label: 'log10(x)',   value: 'log10' },
+						{ label: 'exp(x)',     value: 'exp'   },
+					],
+				},
+			],
+			dynamicPorts({ fn }) {
+				const hasPow = fn === 'pow';
 				return {
 					inputs: [
-						{ id: 'inp', type: 'input', label: '➜', dataType: 'void', description: 'สายลำดับการทำงาน' },
-						...specs.map((spec, i) => ({
-							id: `arg${i + 1}`, type: 'input' as const, label: `Arg ${i + 1}`, dataType: specifierToDataType(spec) as import('./types.js').DataType
-						}))
-					]
+						{ id: 'x',   type: 'input', label: hasPow ? 'Base' : 'X', dataType: 'float' as const },
+						...(hasPow ? [{ id: 'exp', type: 'input' as const, label: 'Exp', dataType: 'float' as const }] : []),
+					],
 				};
 			},
 			toCode({ block, pad, safeId, resolveInput, params }) {
-				const fmt = (params.format ?? '%d').replaceAll('"', '\\"');
-				const specs = getPrintfSpecifiers(fmt);
-				const args = specs.map((_, i) => resolveInput(`arg${i + 1}`) ?? '0');
-				const wrappedArgs = wrapPrintfArgs(args, specs);
-				const id = safeId(block.id);
-				const argsPart = wrappedArgs.length > 0 ? `, ${wrappedArgs.join(', ')}` : '';
-				return {
-					parts: [
-						[
-							`${pad}char ${id}_buf[256];`,
-							`${pad}snprintf(${id}_buf, sizeof(${id}_buf), "${fmt}"${argsPart});`,
-							`${pad}String ${id} = String(${id}_buf);`
-						],
-						{ portId: 'out', depthDelta: 0 }
-					]
-				};
+				const id  = safeId(block.id);
+				const fn  = params.fn ?? 'sqrt';
+				const x   = resolveInput('x') ?? '0';
+				const exp = resolveInput('exp') ?? '2';
+				const call = fn === 'pow' ? `pow(${x}, ${exp})` : `${fn}(${x})`;
+				return { parts: [[`${pad}float ${id} = (float)${call};`], { portId: 'result', depthDelta: 0 }] };
 			}
 		},
+		// ── Comparison ────────────────────────────────────────────────────────
+		{
+			id: 'comparison',
+			name: 'Comparison',
+			color: '#6366f1',
+			icon: '≠',
+			category: 'data',
+			description: 'เปรียบเทียบสองค่า คืนค่า bool — A > B, A == B, ...',
+			inputs: [
+				{ id: 'a', type: 'input', label: 'A', dataType: 'any' },
+				{ id: 'b', type: 'input', label: 'B', dataType: 'any', description: 'ถ้าไม่ต่อสาย ใช้ค่าจาก param' },
+			],
+			outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: 'bool' }],
+			params: [
+				{
+					id: 'op', label: 'Operator', type: 'option', default: '==',
+					options: [
+						{ label: '== (เท่ากับ)',       value: '==' },
+						{ label: '!= (ไม่เท่ากับ)',     value: '!=' },
+						{ label: '>  (มากกว่า)',        value: '>'  },
+						{ label: '>= (มากกว่าหรือเท่า)', value: '>=' },
+						{ label: '<  (น้อยกว่า)',        value: '<'  },
+						{ label: '<= (น้อยกว่าหรือเท่า)', value: '<=' },
+					],
+				},
+				{ id: 'b_val', label: 'B (literal)', type: 'number', default: '0', description: 'ใช้เมื่อไม่มีบล็อกต่อเข้า B' },
+			],
+			toCode({ block, pad, safeId, resolveInput, params }) {
+				const id = safeId(block.id);
+				const a  = resolveInput('a') ?? '0';
+				const b  = resolveInput('b') ?? (params.b_val ?? '0');
+				const op = params.op ?? '==';
+				return { parts: [[`${pad}bool ${id} = (${a}) ${op} (${b});`], { portId: 'result', depthDelta: 0 }] };
+			}
+		},
+		// ── Logical ───────────────────────────────────────────────────────────
+		{
+			id: 'logical',
+			name: 'Logical',
+			color: '#6366f1',
+			icon: '&&',
+			category: 'data',
+			description: 'AND / OR ของสอง bool — คืนค่า bool',
+			inputs: [
+				{ id: 'a', type: 'input', label: 'A', dataType: 'bool' },
+				{ id: 'b', type: 'input', label: 'B', dataType: 'bool' },
+			],
+			outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: 'bool' }],
+			params: [
+				{
+					id: 'op', label: 'Operator', type: 'option', default: '&&',
+					options: [
+						{ label: 'AND (&&)', value: '&&' },
+						{ label: 'OR  (||)', value: '||' },
+					],
+				},
+			],
+			toCode({ block, pad, safeId, resolveInput, params }) {
+				const id = safeId(block.id);
+				const a  = resolveInput('a') ?? 'false';
+				const b  = resolveInput('b') ?? 'false';
+				const op = params.op ?? '&&';
+				return { parts: [[`${pad}bool ${id} = (${a}) ${op} (${b});`], { portId: 'result', depthDelta: 0 }] };
+			}
+		},
+		{
+			id: 'logical_not',
+			name: 'NOT',
+			color: '#6366f1',
+			icon: '!',
+			category: 'data',
+			description: 'ผกผันค่า bool — !A',
+			inputs: [{ id: 'a', type: 'input', label: 'A', dataType: 'bool' }],
+			outputs: [{ id: 'result', type: 'output', label: 'Result', dataType: 'bool' }],
+			params: [],
+			toCode({ block, pad, safeId, resolveInput }) {
+				const id = safeId(block.id);
+				const a  = resolveInput('a') ?? 'false';
+				return { parts: [[`${pad}bool ${id} = !(${a});`], { portId: 'result', depthDelta: 0 }] };
+			}
+		},
+		// ── Bitwise ───────────────────────────────────────────────────────────
+		{
+			id: 'bitwise',
+			name: 'Bitwise',
+			color: '#64748b',
+			icon: '&',
+			category: 'data',
+			description: 'การดำเนินการระดับ bit — &, |, ^, ~, <<, >>',
+			inputs: [],
+			outputs: [],
+			params: [
+				{
+					id: 'op', label: 'Operator', type: 'option', default: '&',
+					options: [
+						{ label: 'AND  (&)',    value: '&'   },
+						{ label: 'OR   (|)',    value: '|'   },
+						{ label: 'XOR  (^)',    value: '^'   },
+						{ label: 'NOT  (~)',    value: '~'   },
+						{ label: 'SHL  (<<)',   value: '<<'  },
+						{ label: 'SHR  (>>)',   value: '>>'  },
+					],
+				},
+				{
+					id: 'data_type', label: 'Type', type: 'option', default: 'int',
+					options: [{ label: 'int', value: 'int' }, { label: 'long', value: 'long' }, { label: 'uint8_t', value: 'uint8_t' }, { label: 'uint16_t', value: 'uint16_t' }, { label: 'uint32_t', value: 'uint32_t' }],
+				},
+				{ id: 'shift', label: 'Shift Amount', type: 'number', default: '1', hidden: ({ params }) => params.op !== '<<' && params.op !== '>>' },
+			],
+			dynamicPorts({ op }) {
+				const unary = op === '~';
+				return {
+					inputs: [
+						{ id: 'a', type: 'input' as const, label: unary ? 'A' : 'A', dataType: 'int' as const },
+						...(unary ? [] : [{ id: 'b', type: 'input' as const, label: 'B', dataType: 'int' as const }]),
+					],
+					outputs: [{ id: 'result', type: 'output' as const, label: 'Result', dataType: 'int' as const }],
+				};
+			},
+			toCode({ block, pad, safeId, resolveInput, params }) {
+				const id = safeId(block.id);
+				const t  = params.data_type ?? 'int';
+				const op = params.op ?? '&';
+				const a  = resolveInput('a') ?? '0';
+				const expr = op === '~'
+					? `(${t})(~(${t})(${a}))`
+					: (op === '<<' || op === '>>')
+						? `(${t})((${t})(${a}) ${op} ${params.shift ?? '1'})`
+						: `(${t})((${t})(${a}) ${op} (${t})(${resolveInput('b') ?? '0'}))`;
+				return { parts: [[`${pad}${t} ${id} = ${expr};`], { portId: 'result', depthDelta: 0 }] };
+			}
+		},
+
 		{
 			id: 'void_to_int',
 			name: 'Void to Int',
