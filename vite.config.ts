@@ -12,8 +12,11 @@ export default defineConfig({
 		sveltekit(),
 		VitePWA({
 			registerType: 'autoUpdate',
-			// Tell the plugin about the base path so it injects the correct
-			// <link rel="manifest"> and registers the SW at the right scope.
+			// SvelteKit generates HTML via adapter (post-build), not Vite's
+			// transformIndexHtml, so we handle manifest link + SW registration
+			// manually in app.html and +layout.svelte.
+			injectRegister: null,
+			// Tell the plugin about the base path so the SW scope is correct.
 			base: base ? `${base}/` : '/',
 			includeAssets: ['favicon.png', 'robots.txt'],
 			manifest: {
