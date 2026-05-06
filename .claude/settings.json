@@ -15,7 +15,12 @@
       "WebSearch",
       "Bash(python3 -c ' *)",
       "Bash(python3)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(Copy-Item \"c:\\\\Users\\\\sonth\\\\GitHub\\\\ui-click\\\\src\\\\lib\\\\assets\\\\favicon.png\" \"c:\\\\Users\\\\sonth\\\\GitHub\\\\ui-click\\\\static\\\\favicon.png\" -Force)",
+      "Bash(Remove-Item \"c:\\\\Users\\\\sonth\\\\GitHub\\\\ui-click\\\\static\\\\icon.svg\")",
+      "Bash(Write-Host \"Done\")",
+      "PowerShell(Copy-Item \"c:\\\\Users\\\\sonth\\\\GitHub\\\\ui-click\\\\src\\\\lib\\\\assets\\\\favicon.png\" \"c:\\\\Users\\\\sonth\\\\GitHub\\\\ui-click\\\\static\\\\favicon.png\" -Force)",
+      "PowerShell(\"Done\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\sonth\\GitHub\\ui-click\\src\\lib"
