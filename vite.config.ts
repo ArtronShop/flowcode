@@ -3,12 +3,18 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Respect BASE_PATH env var (set for sub-path deployments like GitHub Pages)
+const base = process.env.BASE_PATH ?? '';
+
 export default defineConfig({
 	plugins: [
 		tailwindcss(),
 		sveltekit(),
 		VitePWA({
 			registerType: 'autoUpdate',
+			// Tell the plugin about the base path so it injects the correct
+			// <link rel="manifest"> and registers the SW at the right scope.
+			base: base ? `${base}/` : '/',
 			includeAssets: ['favicon.png', 'robots.txt'],
 			manifest: {
 				name: 'FlowCode',
@@ -18,9 +24,12 @@ export default defineConfig({
 				background_color: '#0f172a',
 				display: 'standalone',
 				orientation: 'any',
-				start_url: '/',
-				scope: '/',
+				// Use base-aware start_url and scope
+				start_url: base ? `${base}/` : '/',
+				scope:     base ? `${base}/` : '/',
 				icons: [
+					// Use relative paths (relative to manifest location) so
+					// they resolve correctly regardless of the base path.
 					{
 						src: 'favicon.png',
 						sizes: '192x192',
@@ -36,12 +45,11 @@ export default defineConfig({
 				],
 			},
 			workbox: {
-				// Pre-cache all build assets
 				globPatterns: ['**/*.{js,css,html,svg,ico,woff,woff2,webp,png}'],
-				// Cache strategies for runtime requests
+				// Use the correct SW scope for sub-path deployments
+				navigateFallback: null,
 				runtimeCaching: [
 					{
-						// SvelteKit page navigation — network-first with offline fallback
 						urlPattern: ({ request }) => request.mode === 'navigate',
 						handler: 'NetworkFirst',
 						options: {
@@ -50,7 +58,6 @@ export default defineConfig({
 						},
 					},
 					{
-						// Static assets — cache-first
 						urlPattern: /\.(?:js|css|woff2?)$/,
 						handler: 'CacheFirst',
 						options: {
@@ -59,11 +66,9 @@ export default defineConfig({
 						},
 					},
 				],
-				// Don't cache the SvelteKit service worker itself
-				navigateFallback: null,
 			},
 			devOptions: {
-				enabled: false, // disable SW in dev to avoid caching issues
+				enabled: false,
 			},
 		}),
 	],
