@@ -18,7 +18,7 @@ export default defineConfig({
 			injectRegister: null,
 			// Tell the plugin about the base path so the SW scope is correct.
 			base: base ? `${base}/` : '/',
-			includeAssets: ['favicon.png', 'robots.txt'],
+			includeAssets: ['favicon.png', 'icon-192.png', 'icon-512.png', 'robots.txt'],
 			manifest: {
 				name: 'FlowCode',
 				short_name: 'FlowCode',
@@ -31,16 +31,14 @@ export default defineConfig({
 				start_url: base ? `${base}/` : '/',
 				scope:     base ? `${base}/` : '/',
 				icons: [
-					// Use relative paths (relative to manifest location) so
-					// they resolve correctly regardless of the base path.
 					{
-						src: 'favicon.png',
+						src: 'icon-192.png',
 						sizes: '192x192',
 						type: 'image/png',
 						purpose: 'any',
 					},
 					{
-						src: 'favicon.png',
+						src: 'icon-512.png',
 						sizes: '512x512',
 						type: 'image/png',
 						purpose: 'maskable',
