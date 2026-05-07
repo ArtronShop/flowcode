@@ -743,6 +743,8 @@
 				const connIds = connections.map((c) => parseInt(c.id.replace('conn-', '')) || 0);
 				nextId = Math.max(0, ...ids, ...connIds) + 1;
 				onchange?.('project:load');
+				// Center the workflow after Svelte renders the updated blocks
+				requestAnimationFrame(() => zoomReset());
 			}
 		} catch {
 			console.error('ไม่สามารถโหลดไฟล์โปรเจคได้');
@@ -762,8 +764,14 @@
 
 	export function zoomReset() {
 		zoom = 1;
-		panX = 0;
-		panY = 0;
+		if (canvasBlocks.length === 0) { panX = 0; panY = 0; onchange?.('zoom'); return; }
+		const rect = canvas.getBoundingClientRect();
+		const minX = Math.min(...canvasBlocks.map((b) => b.x));
+		const minY = Math.min(...canvasBlocks.map((b) => b.y));
+		const maxX = Math.max(...canvasBlocks.map((b) => b.x + BLOCK_WIDTH));
+		const maxY = Math.max(...canvasBlocks.map((b) => b.y + blockHeight(b)));
+		panX = (rect.width  - (maxX - minX)) / 2 - minX;
+		panY = (rect.height - (maxY - minY)) / 2 - minY;
 		onchange?.('zoom');
 	}
 
