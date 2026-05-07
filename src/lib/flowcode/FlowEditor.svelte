@@ -56,27 +56,35 @@
 
 	// ─── Varname registry ────────────────────────────────────────────
 	// category → string[] เช่น { http: ['http', 'http2'], tcp: ['client'] }
-	let varnameRegistry = $state<Record<string, string[]>>({
-		http:      ['http'],
-		tcp:       ['tcpClient'],
-		udp:       ['udp'],
-		file:      ['myFile'],
-		webserver: ['server'],
-		mqtt:      ['mqttClient'],
-		json:      ['doc'],
-		modbus:    ['modbus'],
-		var_int:       ['myInt'],
-		var_float:     ['myFloat'],
-		var_string:    ['myString'],
-		var_bool:      ['myBool'],
-		influxdb:      ['influxClient'],
-		influxdb_point:['sensorPoint'],
+	// Seeded defaults — auto-derived from block definitions (any category, any extension).
+	// Extensions declare default varnames via: { type: 'varname', category: '...', default: '...' }
+	const seededVarnames = $derived.by(() => {
+		const seed: Record<string, string[]> = {};
+		for (const cat of categories) {
+			for (const block of cat.blocks) {
+				for (const param of (block.params ?? []) as import('$lib/blocks/types.js').ParamDef[]) {
+					if (param.type === 'varname' && 'category' in param && param.default) {
+						if (!seed[param.category]) seed[param.category] = [];
+						if (!seed[param.category].includes(param.default))
+							seed[param.category].push(param.default);
+					}
+				}
+			}
+		}
+		return seed;
 	});
 
+	// User-added varnames only — persisted in project JSON.
+	// Does NOT contain seeded defaults so the list stays minimal.
+	let varnameRegistry = $state<Record<string, string[]>>({});
+
 	function getVarnameOptions(category: string) {
-		const names = varnameRegistry[category] ?? [];
+		// Merge seeded defaults + user-added names (deduplicated)
+		const seeded = seededVarnames[category] ?? [];
+		const user   = varnameRegistry[category]  ?? [];
+		const all    = [...new Set([...seeded, ...user])];
 		return [
-			...names.map((n) => ({ label: n, value: n })),
+			...all.map((n) => ({ label: n, value: n })),
 			{ label: '+ New...', value: '__new__' },
 		];
 	}
@@ -86,7 +94,6 @@
 			updateBlockParam(blockId, paramId, value);
 			return;
 		}
-		// prompt for new varname
 		const name = window.prompt(`ชื่อตัวแปรใหม่ (${category}):`);
 		if (!name || !name.trim()) return;
 		const trimmed = name.trim().replace(/[^a-zA-Z0-9_]/g, '_');
