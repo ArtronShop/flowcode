@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { ChevronDown, Loader } from 'lucide-svelte';
+	import { ChevronDown, Loader, Check } from 'lucide-svelte';
 
 	export interface DropdownOption {
 		value: string;
@@ -18,6 +18,8 @@
 		class?: string;
 		style?: string;
 		onmousedown?: (e: MouseEvent) => void;
+		/** multiselect mode — value คือ JSON array string เช่น '["a","b"]' */
+		multiselect?: boolean;
 	}
 
 	let {
@@ -26,11 +28,12 @@
 		loadOptions,
 		onchange,
 		disabled = false,
-		placeholder = '-- เลือก --',
+		placeholder = '-',
 		emptyText = 'ไม่มีตัวเลือก',
 		class: cls = '',
 		style = '',
 		onmousedown,
+		multiselect = false,
 	}: Props = $props();
 
 	let open = $state(false);
@@ -106,9 +109,24 @@
 		}
 	}
 
+	// multiselect helpers
+	const selectedValues = $derived.by<string[]>(() => {
+		if (!multiselect) return [];
+		try { return JSON.parse(value) as string[]; } catch { return []; }
+	});
+
 	function select(opt: DropdownOption) {
-		onchange?.(opt.value);
-		open = false;
+		if (multiselect) {
+			const cur = selectedValues;
+			const next = cur.includes(opt.value)
+				? cur.filter(v => v !== opt.value)
+				: [...cur, opt.value];
+			onchange?.(JSON.stringify(next));
+			// stay open so user can pick more
+		} else {
+			onchange?.(opt.value);
+			open = false;
+		}
 	}
 
 	function onWindowMousedown(e: MouseEvent) {
@@ -121,9 +139,17 @@
 		}
 	}
 
-	const selectedLabel = $derived(
-		liveOptions.find((o) => o.value === value)?.label ?? (value || placeholder)
-	);
+	const selectedLabel = $derived.by(() => {
+		if (multiselect) {
+			const sel = selectedValues;
+			if (sel.length === 0) return placeholder;
+			return liveOptions
+				.filter(o => sel.includes(o.value))
+				.map(o => o.label)
+				.join(', ') || placeholder;
+		}
+		return liveOptions.find((o) => o.value === value)?.label ?? (value || placeholder);
+	});
 </script>
 
 <svelte:window onmousedown={onWindowMousedown} />
@@ -151,18 +177,28 @@
 		{#if loading}
 			<div class="flex items-center justify-center gap-1.5 px-2 py-3 text-[11px] text-gray-500">
 				<Loader size={12} class="animate-spin" />
-				<span>กำลังโหลด...</span>
+				<span>Loading...</span>
 			</div>
 		{:else if liveOptions.length === 0}
 			<div class="px-3 py-2 text-[11px] text-gray-500 italic">{emptyText}</div>
 		{:else}
 			{#each liveOptions as opt}
+				{@const isActive = multiselect ? selectedValues.includes(opt.value) : opt.value === value}
 				<button
 					type="button"
-					class="dropdown-item {opt.value === value ? 'active' : ''}"
+					class="dropdown-item"
 					onmousedown={(e) => { e.stopPropagation(); select(opt); }}
 				>
-					{opt.label}
+					{#if multiselect}
+						<span class="flex items-center gap-1">
+							<span class="flex h-3.5 w-3.5 shrink-0 items-center">
+								{#if isActive}<Check size={11} strokeWidth={3} />{/if}
+							</span>
+							{opt.label}
+						</span>
+					{:else}
+						{opt.label}
+					{/if}
 				</button>
 			{/each}
 		{/if}

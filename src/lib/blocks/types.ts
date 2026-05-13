@@ -195,12 +195,19 @@ export type ParamVarname = ParamBase & {
 	category: string;
 };
 
-export type ParamDef = ParamOption | ParamText | ParamNumber | ParamColor | ParamVarname;
+/** param แบบ multiple select — value เก็บเป็น JSON array string เช่น '["a","b"]' */
+export type ParamMultiSelect = ParamBase & {
+	type: 'multiselect';
+	options: ParamOptionItem[];
+};
+
+export type ParamDef = ParamOption | ParamText | ParamNumber | ParamColor | ParamVarname | ParamMultiSelect;
 
 /** helper: คืนค่า default ของ param */
 export function paramDefault(p: ParamDef): string {
-	if (p.type === 'option') return p.default ?? (Array.isArray(p.options) ? p.options[0]?.value : undefined) ?? '';
-	if (p.type === 'color')  return p.default ?? (p.format === 'rgb565' ? '0' : '0x000000');
+	if (p.type === 'option')      return p.default ?? (Array.isArray(p.options) ? p.options[0]?.value : undefined) ?? '';
+	if (p.type === 'color')       return p.default ?? (p.format === 'rgb565' ? '0' : '0x000000');
+	if (p.type === 'multiselect') return p.default ?? '[]';
 	return p.default ?? (p.type === 'number' ? '0' : '');
 }
 
