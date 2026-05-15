@@ -54,6 +54,42 @@
 	let canvasBlocks = $state<CanvasBlock[]>([]);
 	let connections = $state<Connection[]>([]);
 
+	// ─── Undo / Redo history ─────────────────────────────────────────
+	type HistorySnap = { blocks: CanvasBlock[]; conns: Connection[] };
+	const MAX_HISTORY = 50;
+	let history      = $state<HistorySnap[]>([]);
+	let historyIndex = $state(-1);
+
+	function saveHistory() {
+		const snap: HistorySnap = {
+			blocks: JSON.parse(JSON.stringify(canvasBlocks)),
+			conns:  JSON.parse(JSON.stringify(connections)),
+		};
+		const base = history.slice(0, historyIndex + 1);
+		base.push(snap);
+		if (base.length > MAX_HISTORY) base.shift();
+		history = base;
+		historyIndex = history.length - 1;
+	}
+
+	function undo() {
+		if (historyIndex <= 0) return;
+		historyIndex--;
+		const snap = history[historyIndex];
+		canvasBlocks = JSON.parse(JSON.stringify(snap.blocks));
+		connections  = JSON.parse(JSON.stringify(snap.conns));
+		onchange?.('project:load');
+	}
+
+	function redo() {
+		if (historyIndex >= history.length - 1) return;
+		historyIndex++;
+		const snap = history[historyIndex];
+		canvasBlocks = JSON.parse(JSON.stringify(snap.blocks));
+		connections  = JSON.parse(JSON.stringify(snap.conns));
+		onchange?.('project:load');
+	}
+
 	// ─── Varname registry ────────────────────────────────────────────
 	// category → string[] เช่น { http: ['http', 'http2'], tcp: ['client'] }
 	// Seeded defaults — auto-derived from block definitions (any category, any extension).
@@ -386,12 +422,14 @@
 				}
 			}
 			draggingConnEnd = null;
+			saveHistory(); // conn re-wire end
 			return;
 		}
 		if (connectingFrom) {
 			const hit = findPortAtPos(mousePos.x, mousePos.y, 'input', connectingFrom.blockId);
 			if (!hit) connectingFrom = null;
 		}
+		if (draggingBlock || multiDragOffsets) saveHistory(); // block move end
 		draggingBlock = null;
 		multiDragOffsets = null;
 	}
@@ -456,6 +494,11 @@
 	function handleKeyDown(e: KeyboardEvent) {
 		const active = document.activeElement;
 		const isInput = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
+		// Undo / Redo — use e.code (physical key) so it works with any keyboard layout
+		if (e.ctrlKey && !isInput) {
+			if (e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+			if (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey)) { e.preventDefault(); redo(); return; }
+		}
 		if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput) {
 			if (selectedBlockIds.size > 0) {
 				const toDelete = new Set([...selectedBlockIds, ...(selectedBlockId ? [selectedBlockId] : [])]);
@@ -474,7 +517,7 @@
 				selectedConnId = null;
 			}
 		}
-		if (e.ctrlKey && e.key === 'a' && !isInput) {
+		if (e.ctrlKey && e.code === 'KeyA' && !isInput) {
 			e.preventDefault();
 			selectedBlockIds = new Set(canvasBlocks.map((b) => b.id));
 			selectedConnIds = new Set(connections.map((c) => c.id));
@@ -545,6 +588,7 @@
 					toPortId: portId
 				}
 			];
+			saveHistory();
 			onchange?.('conn:add');
 		}
 		connectingFrom = null;
@@ -563,6 +607,7 @@
 			outputs: block.outputs.map((p) => ({ ...p })),
 			params: { ...block.params },
 		}];
+		saveHistory();
 		onchange?.('block:add');
 	}
 
@@ -572,11 +617,13 @@
 			(c) => c.fromBlockId !== blockId && c.toBlockId !== blockId
 		);
 		if (connectingFrom?.blockId === blockId) connectingFrom = null;
+		saveHistory();
 		onchange?.('block:delete');
 	}
 
 	export function deleteConnection(connId: string) {
 		connections = connections.filter((c) => c.id !== connId);
+		saveHistory();
 		onchange?.('conn:delete');
 	}
 
@@ -656,6 +703,7 @@
 			}
 		}
 
+		saveHistory();
 		onchange?.('block:param');
 	}
 
@@ -709,6 +757,7 @@
 		const newNote = prompt('ข้อความที่ต้องการโน็ต', b.note);
 		if (newNote == null) return; // Cancel
 		b.note = newNote;
+		saveHistory();
 		onchange?.('block:note-edit');
 	}
 
@@ -742,6 +791,10 @@
 				const ids = canvasBlocks.map((b) => parseInt(b.id.replace('block-', '')) || 0);
 				const connIds = connections.map((c) => parseInt(c.id.replace('conn-', '')) || 0);
 				nextId = Math.max(0, ...ids, ...connIds) + 1;
+				// Reset history on project load so undo doesn't go into previous project
+				history = [];
+				historyIndex = -1;
+				saveHistory();
 				onchange?.('project:load');
 				// Center the workflow after Svelte renders the updated blocks
 				requestAnimationFrame(() => zoomReset());
@@ -759,6 +812,9 @@
 		zoom = 1;
 		panX = 0;
 		panY = 0;
+		history = [];
+		historyIndex = -1;
+		saveHistory();
 		onchange?.('project:clear');
 	}
 

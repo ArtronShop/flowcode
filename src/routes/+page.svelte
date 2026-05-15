@@ -567,13 +567,13 @@
 	const active = document.activeElement;
 	const isInput = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
 	if (isInput) return;
-	if (e.ctrlKey && e.key === 'o') { e.preventDefault(); openProject(); }
-	else if (e.ctrlKey && e.key === 'n') { e.preventDefault(); newProject(); }
-	else if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveProject(); }
-	else if (e.ctrlKey && e.key === 'r') { e.preventDefault(); runProject(); }
-	else if (e.ctrlKey && e.key === 'm') { e.preventDefault(); activeConsoleTab = 'serial'; }
-	else if (e.ctrlKey && e.key === 'h') { e.preventDefault(); togglePanel('help'); helpBlockDef = null; }
-	else if (e.ctrlKey && e.key === 'e') { e.preventDefault(); togglePanel('extensions'); }
+	if (e.ctrlKey && e.code === 'KeyO') { e.preventDefault(); openProject(); }
+	else if (e.ctrlKey && e.code === 'KeyN') { e.preventDefault(); newProject(); }
+	else if (e.ctrlKey && e.code === 'KeyS') { e.preventDefault(); saveProject(); }
+	else if (e.ctrlKey && e.code === 'KeyR') { e.preventDefault(); runProject(); }
+	else if (e.ctrlKey && e.code === 'KeyM') { e.preventDefault(); activeConsoleTab = 'serial'; }
+	else if (e.ctrlKey && e.code === 'KeyH') { e.preventDefault(); togglePanel('help'); helpBlockDef = null; }
+	else if (e.ctrlKey && e.code === 'KeyE') { e.preventDefault(); togglePanel('extensions'); }
 }} />
 
 <ConfirmDialog
