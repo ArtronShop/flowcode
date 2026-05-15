@@ -1,12 +1,23 @@
 import type { BoardItem } from '../types.js'
+import { opt, setting } from '../helpers.js'
 import esp32dev from "../esp32dev.js";
-import { blockCategories } from './blocks/index.js';
+import { blockCategories } from './blocks';
 
 const atd35s3farm1: BoardItem = {
     ...esp32dev,
     id: 'atd35s3farm1',
     name: 'ATD3.5-S3 + Farm1',
     fqbn: 'esp32:esp32:atd35s3:DebugLevel=info',
+    settings: [
+        setting('DebugLevel', 'Core Debug Level', [
+            opt('None', 'none', true),
+            opt('Error', 'error'),
+            opt('Warn', 'warn'),
+            opt('Info', 'info'),
+            opt('Debug', 'debug'),
+            opt('Verbose', 'verbose'),
+        ]),
+    ],
     depends: [ 
         'ATD3.5-S3@1.3.1', 
         'ArduinoJson@6.21.4', 

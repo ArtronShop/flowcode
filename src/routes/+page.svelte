@@ -8,10 +8,37 @@
 	import Dropdown from '$lib/components/Dropdown.svelte';
 	import CodeViewer from '$lib/components/CodeViewer.svelte';
 	import boards from '$lib/boards/index.js';
+	import type { BoardSetting } from '$lib/boards/types.js';
+
+	function buildFqbn(baseFqbn: string, settings: BoardSetting[], values: Record<string, string>): string {
+		if (!settings || settings.length === 0) return baseFqbn;
+		const colonParts = baseFqbn.split(':');
+		const boardPart  = colonParts.slice(0, 3).join(':');
+		const existingOpts = colonParts[3] ?? '';
+		const optMap = new Map<string, string>();
+		if (existingOpts) {
+			for (const pair of existingOpts.split(',')) {
+				const eq = pair.indexOf('=');
+				if (eq > 0) optMap.set(pair.slice(0, eq), pair.slice(eq + 1));
+			}
+		}
+		for (const setting of settings) {
+			const defaultOpt  = setting.options.find(o => o.default);
+			const storedValue = values[setting.id] ?? defaultOpt?.value;
+			const selected    = setting.options.find(o => o.value === storedValue) ?? defaultOpt;
+			if (selected?.default) {
+				optMap.delete(setting.id);        // default option → ลบออก (ไม่ inject)
+			} else if (selected) {
+				optMap.set(setting.id, selected.value); // id เป็น fqbn key, value เป็น fqbn value
+			}
+		}
+		if (optMap.size === 0) return boardPart;
+		return `${boardPart}:${[...optMap.entries()].map(([k, v]) => `${k}=${v}`).join(',')}`;
+	}
 	import type { BlockCategory, BlockDef } from '$lib/blocks/types.js';
 	import { FlowcodeAgentClient } from '$lib/agent-client/index.js';
 	import {
-		FilePlus, FolderOpen, Save, CirclePlay, SquareCode,
+		FilePlus, FolderOpen, Save, CirclePlay, SquareCode, SlidersHorizontal,
 		User, Folder, LogOut, Copy, Terminal,
 		Files, Puzzle, CircleQuestionMark,
 		ArrowLeft, X, Download, Trash2, CircleCheck,
@@ -83,6 +110,28 @@
 
 	let selectedBoard = $state(boards[0]);
 	let boardConnected = $state(false);
+
+	// ─── Board settings (per-board, persisted) ───────────────────────
+	// allBoardSettings[boardId][settingId] = selectedOptionValue
+	// โหลดจาก localStorage ตอน init เพื่อให้ $effect ไม่ทับค่าเดิมก่อน onMount
+	let allBoardSettings = $state<Record<string, Record<string, string>>>(
+		(() => {
+			try {
+				const saved = localStorage.getItem('board-settings');
+				return saved ? JSON.parse(saved) : {};
+			} catch { return {}; }
+		})()
+	);
+	let showBoardSettings = $state(false);
+
+	const currentBoardSettings = $derived(allBoardSettings[selectedBoard.id] ?? {});
+	const activeFqbn = $derived(
+		buildFqbn(selectedBoard.fqbn, selectedBoard.settings ?? [], currentBoardSettings)
+	);
+
+	$effect(() => {
+		localStorage.setItem('board-settings', JSON.stringify(allBoardSettings));
+	});
 
 	// ─── FlowcodeAgent (shared instance) ────────────────────────────
 	const agent = new FlowcodeAgentClient('ws://localhost:8080');
@@ -376,21 +425,22 @@
 				log(`⏭ ข้าม library (ติดตั้งแล้วทั้งหมด)`);
 			}
 
-			// 3 & 4. Write + Compile (ข้ามถ้าโค้ดและ board เหมือนเดิม)
+			// 3 & 4. Write + Compile (ข้ามถ้าโค้ดและ fqbn เหมือนเดิม)
+			const fqbn = activeFqbn;
 			const currentHash = await hashCode(code);
-			if (currentHash === lastCompiledHash && board.fqbn === lastCompiledFqbn) {
+			if (currentHash === lastCompiledHash && fqbn === lastCompiledFqbn) {
 				log(`⏭ ข้าม write & compile (โค้ดเหมือนรอบที่แล้ว)`);
 			} else {
 				log(`📝 เขียน sketch: ${sketchName}`);
 				await agent.writeSketch(sketchName, code);
 				log('✅ เขียน sketch สำเร็จ');
 
-				log(`🔨 กำลัง compile (${board.fqbn})...`);
-				await agent.compile(sketchName, board.fqbn);
+				log(`🔨 กำลัง compile (${fqbn})...`);
+				await agent.compile(sketchName, fqbn);
 				log('✅ Compile สำเร็จ');
 
 				lastCompiledHash = currentHash;
-				lastCompiledFqbn = board.fqbn;
+				lastCompiledFqbn = fqbn;
 			}
 
 			// Disconnect Serial Port before upload
@@ -403,7 +453,7 @@
 			// 5. Upload
 			if (!selectedPort) throw new Error('กรุณาเลือก Port ก่อน Upload');
 			log(`🚀 กำลัง upload ไปที่ ${selectedPort}...`);
-			await agent.upload(sketchName, board.fqbn, selectedPort);
+			await agent.upload(sketchName, fqbn, selectedPort);
 			log('✅ Upload สำเร็จ');
 
 			if (serialConnectAfterUpload) {
@@ -596,8 +646,8 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="flex h-screen flex-col overflow-hidden bg-gray-950 text-white"
-	onclick={() => { showUserMenu = false; }}
-	onkeydown={(e) => { if (e.key === 'Escape') showUserMenu = false; }}
+	onclick={() => { showUserMenu = false; showBoardSettings = false; }}
+	onkeydown={(e) => { if (e.key === 'Escape') { showUserMenu = false; showBoardSettings = false; } }}
 >
 	<!-- ─── Top Navbar ──────────────────────────────────────────────── -->
 	<header class="z-20 flex items-center justify-between border-b border-gray-700/60 bg-gray-900 px-4 py-2 shadow-lg">
@@ -640,16 +690,57 @@
 
 			<div class="mx-1 h-5 w-px bg-gray-700"></div>
 
-			<!-- Board selector -->
-			<div class="flex items-center gap-1.5 w-40 px-1">
+			<!-- Board selector + settings -->
+			<div class="flex items-center gap-1 px-1">
 				<Cpu size={13} class="shrink-0 text-gray-500" />
-				<Dropdown
-					value={selectedBoard.id}
-					options={boards.map((b) => ({ value: b.id, label: b.name }))}
-					onchange={(v) => changeBoard(v)}
-					placeholder="เลือกบอร์ด"
-					style="font-size:12px; padding: 3px 8px;"
-				/>
+				<div class="w-36">
+					<Dropdown
+						value={selectedBoard.id}
+						options={boards.map((b) => ({ value: b.id, label: b.name }))}
+						onchange={(v) => changeBoard(v)}
+						placeholder="เลือกบอร์ด"
+						style="font-size:12px; padding: 3px 8px;"
+					/>
+				</div>
+
+				<!-- Board settings button -->
+				<div class="relative">
+					<button
+						class="flex h-7 w-7 items-center justify-center rounded transition-colors
+							   {showBoardSettings ? 'bg-gray-600 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-white'}"
+						title="Board Settings"
+						onclick={(e) => { e.stopPropagation(); showBoardSettings = !showBoardSettings; }}
+					>
+						<SlidersHorizontal size={13} />
+					</button>
+
+					{#if showBoardSettings}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<div
+						class="absolute left-0 top-9 z-50 w-32 rounded-xl border border-gray-700 bg-gray-800 p-2 pb-0 shadow-2xl"
+						onmousedown={(e) => e.stopPropagation()}
+						onclick={(e) => e.stopPropagation()}
+					>
+						{#each selectedBoard.settings as setting}
+							<div class="mb-2">
+								<span class="mb-1 block text-[10px] text-gray-400">{setting.label}</span>
+								<Dropdown
+									value={currentBoardSettings[setting.id] ?? setting.options.find(o => o.default)?.value ?? setting.options[0]?.value}
+									options={setting.options.map(o => ({ value: o.value, label: o.label }))}
+									onchange={(v) => {
+										allBoardSettings = {
+											...allBoardSettings,
+											[selectedBoard.id]: { ...currentBoardSettings, [setting.id]: v }
+										};
+									}}
+									style="font-size:11px; padding: 3px 8px;"
+								/>
+							</div>
+						{/each}
+					</div>
+					{/if}
+				</div>
 			</div>
 
 			<!-- Port selector -->
