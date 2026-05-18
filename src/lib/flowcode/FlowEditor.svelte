@@ -995,7 +995,12 @@
 					style="left:{block.x}px; top:{block.y}px; width:{BLOCK_WIDTH}px; height:{bh}px;"
 					onmousedown={(e) => handleBlockMouseDown(e, block)}
 					onclick={(e) => e.stopPropagation()}
-					oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); contextMenu = { x: e.clientX, y: e.clientY, blockId: block.id }; }}
+					oncontextmenu={(e) => {
+						const t = e.target as HTMLElement;
+						if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
+						e.preventDefault(); e.stopPropagation();
+						contextMenu = { x: e.clientX, y: e.clientY, blockId: block.id };
+					}}
 				>
 					<div
 						class="absolute inset-0 select-none overflow-visible rounded-xl border shadow-xl transition-shadow"

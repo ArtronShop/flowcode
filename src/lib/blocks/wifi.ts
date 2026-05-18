@@ -11,11 +11,7 @@ export const wifiCategory: BlockCategory = {
 			category: 'wifi',
 			description: 'เชื่อมต่อ WiFi โดยใช้ SSID และ Password (WiFi.begin)',
 			inputs: [{ id: 'in', type: 'input', label: '➜', dataType: 'any', description: 'รับสายลำดับการทำงานจากบล็อกก่อนหน้า' }],
-			outputs: [
-				{ id: 'ok',    type: 'output', label: 'OK',    dataType: 'void', description: 'เชื่อมต่อ WiFi สำเร็จ' },
-				{ id: 'error', type: 'output', label: 'Error', dataType: 'void', description: 'เชื่อมต่อ WiFi ไม่สำเร็จ (หมดเวลารอ)' },
-				{ id: 'out',   type: 'output', label: '➜',     dataType: 'void', description: 'ส่งต่อเสมอหลัง if/else' },
-			],
+			outputs: [],
 			params: [
 				{ id: 'ssid', type: 'text', label: 'SSID', default: 'MyWiFi', description: 'ชื่อเครือข่าย WiFi' },
 				{ id: 'password', type: 'text', label: 'Password', default: 'mypassword', description: 'รหัสผ่าน WiFi' },
@@ -29,6 +25,24 @@ export const wifiCategory: BlockCategory = {
 					{ label: 'No', value: 'false' },
 				]},
 			],
+			dynamicPorts(params) {
+				const wait_connected = params.wait_connected === 'Y';
+				if (wait_connected) {
+					return {
+						outputs: [
+							{ id: 'ok',    type: 'output', label: 'OK',    dataType: 'void', description: 'เชื่อมต่อ WiFi สำเร็จ' },
+							{ id: 'error', type: 'output', label: 'Error', dataType: 'void', description: 'เชื่อมต่อ WiFi ไม่สำเร็จ (หมดเวลารอ)' },
+							{ id: 'out',   type: 'output', label: '➜',     dataType: 'void', description: 'ส่งต่อเสมอหลัง if/else' },
+						]
+					}
+				} else {
+					return {
+						outputs: [
+							{ id: 'out',   type: 'output', label: '➜',     dataType: 'void', description: 'ส่งต่อเสมอหลัง if/else' },
+						]
+					}
+				}
+			},
 			toCode({ pad, params, registerPreprocessor }) {
 				registerPreprocessor('#include <WiFi.h>');
 				const ssid = (params.ssid ?? 'MyWiFi').replaceAll('"', '\\"');
