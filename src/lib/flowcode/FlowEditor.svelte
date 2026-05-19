@@ -237,8 +237,10 @@
 	);
 
 	// ─── Palette drag ────────────────────────────────────────────────
-	function handlePaletteMouseDown(e: MouseEvent, block: BlockDef) {
+	function handlePaletteMouseDown(e: PointerEvent, block: BlockDef) {
 		e.preventDefault();
+		// Capture pointer so move/up events follow the finger even outside the element
+		(e.currentTarget as Element)?.setPointerCapture(e.pointerId);
 		draggingFromPalette = block;
 		paletteGhost = { x: e.clientX, y: e.clientY };
 	}
@@ -278,7 +280,7 @@
 	}
 
 	// ─── Block drag ──────────────────────────────────────────────────
-	function handleBlockMouseDown(e: MouseEvent, block: CanvasBlock) {
+	function handleBlockMouseDown(e: PointerEvent, block: CanvasBlock) {
 		if ((e.target as HTMLElement).closest('.port-btn')) return;
 		e.preventDefault();
 		e.stopPropagation();
@@ -341,16 +343,38 @@
 	}
 
 	// ─── Window-level pointer events (palette ghost + block drag) ────
-	function handleWindowMouseMove(e: MouseEvent) {
+	function handleWindowMouseMove(e: PointerEvent) {
 		if (paletteGhost) paletteGhost = { x: e.clientX, y: e.clientY };
 	}
 
-	function handleWindowMouseUp(e: MouseEvent) {
+	function handleWindowMouseUp(e: PointerEvent) {
 		if (draggingFromPalette) dropPaletteBlock(e.clientX, e.clientY);
 	}
 
 	// ─── Canvas mouse events ─────────────────────────────────────────
-	function handleCanvasMouseMove(e: MouseEvent) {
+	function handleCanvasMouseMove(e: PointerEvent) {
+		// Update pointer position for pinch tracking
+		if (activePointers.has(e.pointerId)) {
+			activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+		}
+
+		// Pinch-zoom: 2 active pointers
+		if (activePointers.size === 2) {
+			const pts = [...activePointers.values()];
+			const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+			if (pinchStartDist > 0) {
+				const rect = canvas.getBoundingClientRect();
+				const cx = (pts[0].x + pts[1].x) / 2 - rect.left;
+				const cy = (pts[0].y + pts[1].y) / 2 - rect.top;
+				const newZoom = Math.max(0.15, Math.min(4, pinchStartZoom * (dist / pinchStartDist)));
+				panX = cx - (cx - panX) * (newZoom / zoom);
+				panY = cy - (cy - panY) * (newZoom / zoom);
+				zoom = newZoom;
+				onchange?.('zoom');
+			}
+			return;
+		}
+
 		if (isPanning) {
 			didPan = true;
 			panX += e.clientX - panStart.x;
@@ -382,7 +406,24 @@
 		}
 	}
 
-	function handleCanvasMouseDown(e: MouseEvent) {
+	// ─── Pinch-zoom tracking ─────────────────────────────────────────
+	const activePointers = new Map<number, { x: number; y: number }>();
+	let pinchStartDist = 0;
+	let pinchStartZoom = 1;
+
+	function handleCanvasMouseDown(e: PointerEvent) {
+		// Track all active pointers for pinch-zoom
+		activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+		if (activePointers.size === 2) {
+			// Two fingers down: start pinch
+			const pts = [...activePointers.values()];
+			pinchStartDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+			pinchStartZoom = zoom;
+			isPanning = false;
+			return;
+		}
+
 		if (draggingBlock) return;
 		const t = e.target as Element;
 		if (t.closest('.port-btn')) return;
@@ -391,11 +432,19 @@
 		isPanning = true;
 		didPan = false;
 		panStart = { x: e.clientX, y: e.clientY };
-		e.preventDefault();
+		// NOTE: intentionally no e.preventDefault() — needed for click/touch-tap to fire
 	}
 
-	function handleCanvasMouseUp() {
-		if (isPanning) { isPanning = false; return; }
+	function handleCanvasMouseUp(e?: PointerEvent) {
+		// Clean up pointer tracking
+		if (e) activePointers.delete(e.pointerId);
+
+		if (isPanning) {
+			isPanning = false;
+			if (!didPan) handleCanvasClick(); // tap (not pan) → deselect
+			didPan = false;
+			return;
+		}
 		if (draggingConnEnd) {
 			const conn = connections.find((c) => c.id === draggingConnEnd!.connId);
 			if (conn) {
@@ -427,7 +476,14 @@
 		}
 		if (connectingFrom) {
 			const hit = findPortAtPos(mousePos.x, mousePos.y, 'input', connectingFrom.blockId);
-			if (!hit) connectingFrom = null;
+			if (hit) {
+				// Fallback for touch: pointer is captured to origin element so
+				// onpointerup on the destination port button never fires.
+				// Complete the connection here instead.
+				handleInputPortMouseUp({ stopPropagation: () => {} } as PointerEvent, hit.blockId, hit.portId);
+			} else {
+				connectingFrom = null;
+			}
 		}
 		if (draggingBlock || multiDragOffsets) saveHistory(); // block move end
 		draggingBlock = null;
@@ -552,13 +608,13 @@
 	}
 
 	// ─── Port interaction ────────────────────────────────────────────
-	function handleOutputPortMouseDown(e: MouseEvent, blockId: string, portId: string) {
+	function handleOutputPortMouseDown(e: PointerEvent, blockId: string, portId: string) {
 		e.stopPropagation();
 		e.preventDefault();
 		connectingFrom = { blockId, portId };
 	}
 
-	function handleInputPortMouseUp(e: MouseEvent, blockId: string, portId: string) {
+	function handleInputPortMouseUp(e: PointerEvent, blockId: string, portId: string) {
 		e.stopPropagation();
 		if (!connectingFrom) return;
 		const _fromPort = canvasBlocks
@@ -796,8 +852,8 @@
 				historyIndex = -1;
 				saveHistory();
 				onchange?.('project:load');
-				// Center the workflow after Svelte renders the updated blocks
-				requestAnimationFrame(() => zoomReset());
+				// embed: fit ให้พอดีหน้าจอ | ปกติ: reset zoom=1 แล้ว center
+				requestAnimationFrame(() => embed ? focusCanvas() : zoomReset());
 			}
 		} catch {
 			console.error('ไม่สามารถโหลดไฟล์โปรเจคได้');
@@ -861,8 +917,12 @@
 </script>
 
 <svelte:window
-	onmousemove={handleWindowMouseMove}
-	onmouseup={handleWindowMouseUp}
+	onpointermove={handleWindowMouseMove}
+	onpointerup={handleWindowMouseUp}
+	onpointercancel={(e) => {
+		activePointers.delete(e.pointerId);
+		if (draggingFromPalette) { draggingFromPalette = null; paletteGhost = null; }
+	}}
 />
 
 <!-- ─── Canvas + Palette ──────────────────────────────────────────── -->
@@ -873,14 +933,14 @@
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
 		bind:this={canvas}
-		class="relative flex-1 overflow-hidden"
+		class="relative flex-1 overflow-hidden touch-none"
 		style="background-color:#0d1117; background-image: radial-gradient(circle, #1e293b 1px, transparent 1px); background-size: {GRID_SIZE * zoom}px {GRID_SIZE * zoom}px; background-position: {panX % (GRID_SIZE * zoom)}px {panY % (GRID_SIZE * zoom)}px; cursor: {isPanning ? 'grabbing' : 'grab'};"
 		role="application"
 		tabindex="-1"
 		aria-label="Flow canvas"
-		onmousemove={handleCanvasMouseMove}
-		onmousedown={handleCanvasMouseDown}
-		onmouseup={handleCanvasMouseUp}
+		onpointermove={handleCanvasMouseMove}
+		onpointerdown={handleCanvasMouseDown}
+		onpointerup={handleCanvasMouseUp}
 		onclick={handleCanvasClick}
 		onwheel={handleWheel}
 	>
@@ -942,14 +1002,14 @@
 								cx={fp.x} cy={fp.y} r={PORT_R + 3}
 								fill="#fbbf24" stroke="#92400e" stroke-width="1.5"
 								style="pointer-events:all; cursor:grab;"
-								onmousedown={(e) => { e.stopPropagation(); e.preventDefault(); draggingConnEnd = { connId: conn.id, end: 'from' }; }}
+								onpointerdown={(e) => { e.stopPropagation(); e.preventDefault(); draggingConnEnd = { connId: conn.id, end: 'from' }; }}
 							/>
 							<!-- svelte-ignore a11y_no_static_element_interactions -->
 							<circle
 								cx={tp.x} cy={tp.y} r={PORT_R + 3}
 								fill="#fbbf24" stroke="#92400e" stroke-width="1.5"
 								style="pointer-events:all; cursor:grab;"
-								onmousedown={(e) => { e.stopPropagation(); e.preventDefault(); draggingConnEnd = { connId: conn.id, end: 'to' }; }}
+								onpointerdown={(e) => { e.stopPropagation(); e.preventDefault(); draggingConnEnd = { connId: conn.id, end: 'to' }; }}
 							/>
 						{/if}
 					{/if}
@@ -993,7 +1053,7 @@
 				<div
 					class="absolute"
 					style="left:{block.x}px; top:{block.y}px; width:{BLOCK_WIDTH}px; height:{bh}px;"
-					onmousedown={(e) => handleBlockMouseDown(e, block)}
+					onpointerdown={(e) => handleBlockMouseDown(e, block)}
 					onclick={(e) => e.stopPropagation()}
 					oncontextmenu={(e) => {
 						const t = e.target as HTMLElement;
@@ -1047,7 +1107,7 @@
 												value={pVal}
 												options={getVarnameOptions((pDef as ParamVarname).category)}
 												onchange={(v) => handleVarnameChange(block.id, pDef.id, (pDef as ParamVarname).category, v)}
-												onmousedown={(e) => e.stopPropagation()}
+												onpointerdown={(e) => e.stopPropagation()}
 												style="height:{PARAM_INPUT_H}px; font-size:10px;"
 											/>
 										{:else if pDef.type === 'multiselect'}
@@ -1057,7 +1117,7 @@
 												options={ms.options}
 												multiselect={true}
 												onchange={(v) => updateBlockParam(block.id, pDef.id, v)}
-												onmousedown={(e) => e.stopPropagation()}
+												onpointerdown={(e) => e.stopPropagation()}
 												style="height:{PARAM_INPUT_H}px; font-size:10px;"
 											/>
 										{:else if pDef.type === 'option'}
@@ -1066,7 +1126,7 @@
 												value={pVal}
 												options={resolvedOptions}
 												onchange={(v) => updateBlockParam(block.id, pDef.id, v)}
-												onmousedown={(e) => e.stopPropagation()}
+												onpointerdown={(e) => e.stopPropagation()}
 												style="height:{PARAM_INPUT_H}px; font-size:10px;"
 											/>
 										{:else if pDef.type === 'number'}
@@ -1076,7 +1136,7 @@
 												type="number"
 												step="any"
 												value={pVal}
-												onmousedown={(e) => e.stopPropagation()}
+												onpointerdown={(e) => e.stopPropagation()}
 												onchange={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLInputElement).value)}
 											/>
 										{:else if pDef.type === 'color'}
@@ -1088,7 +1148,7 @@
 													style="width:{PARAM_INPUT_H}px; height:{PARAM_INPUT_H}px; padding:2px;"
 													type="color"
 													value={colorParamToHex(pVal, colorDef.format)}
-													onmousedown={(e) => e.stopPropagation()}
+													onpointerdown={(e) => e.stopPropagation()}
 													onchange={(e) => updateBlockParam(block.id, pDef.id, hexToColorParam((e.target as HTMLInputElement).value, colorDef.format))}
 												/>
 												<span class="text-[9px] text-gray-400 font-mono truncate select-none">{pValFormat}</span>
@@ -1099,7 +1159,7 @@
 												style="height:{PARAM_INPUT_H}px"
 												type="text"
 												value={pVal}
-												onmousedown={(e) => e.stopPropagation()}
+												onpointerdown={(e) => e.stopPropagation()}
 												oninput={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLInputElement).value)}
 											/>
 										{/if}
@@ -1117,7 +1177,7 @@
 							role="button"
 							tabindex="0"
 							aria-label="Input port {port.label}"
-							onmouseup={(e) => handleInputPortMouseUp(e, block.id, port.id)}
+							onpointerup={(e) => handleInputPortMouseUp(e, block.id, port.id)}
 							onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleInputPortMouseUp(e as unknown as MouseEvent, block.id, port.id); }}
 						>
 							<div
@@ -1135,7 +1195,7 @@
 							role="button"
 							tabindex="0"
 							aria-label="Output port {port.label}"
-							onmousedown={(e) => handleOutputPortMouseDown(e, block.id, port.id)}
+							onpointerdown={(e) => handleOutputPortMouseDown(e, block.id, port.id)}
 							onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleOutputPortMouseDown(e as unknown as MouseEvent, block.id, port.id); }}
 						>
 							<div
@@ -1270,8 +1330,8 @@
 						{#each category.blocks as block}
 							<!-- svelte-ignore a11y_no_static_element_interactions -->
 							<div
-								onmousedown={(e) => handlePaletteMouseDown(e, block)}
-								class="flex cursor-grab items-center gap-2.5 rounded-lg border px-2.5 py-2 transition-all active:cursor-grabbing active:scale-95 hover:brightness-110"
+								onpointerdown={(e) => handlePaletteMouseDown(e, block)}
+								class="flex cursor-grab items-center gap-2.5 rounded-lg border px-2.5 py-2 transition-all active:cursor-grabbing active:scale-95 hover:brightness-110 touch-none"
 								style="border-color:{block.color}30; background:linear-gradient(135deg,{block.color}12,{block.color}06);"
 								role="button"
 								tabindex="0"
