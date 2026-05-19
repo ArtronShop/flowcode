@@ -153,7 +153,7 @@
 	// ── Persistent snackbar เมื่อเชื่อมต่อ Agent ไม่ได้ ──────────────
 	let agentSnackbarId = $state<number | null>(null);
 	$effect(() => {
-		if (!agentConnected) {
+		if (!agentConnected && !isEmbed) {
 			if (agentSnackbarId === null) {
 				agentSnackbarId = snackbar.show({
 					type: 'error',
@@ -216,6 +216,7 @@
 	let serialLineEnding = $state('');
 	let isConnectingSerial = $state(false);
 	let isRunning = $state(false);
+	let runErrorSnackbarId = $state<number | null>(null);
 	type ConsoleTab = 'code' | 'run' | 'serial';
 	let activeConsoleTab = $state<ConsoleTab | null>(null);
 	let autoScrollRun = $state(true);
@@ -365,6 +366,8 @@
 
 	async function runProject() {
 		if (isRunning) return;
+		// ลบ snackbar error จาก Run ครั้งก่อน (ถ้ามี)
+		if (runErrorSnackbarId !== null) { snackbar.close(runErrorSnackbarId); runErrorSnackbarId = null; }
 
 		// ── Check required blocks ─────────────────────────────────────────
 		const missingMap = editor?.checkRequires() ?? new Map();
@@ -463,7 +466,7 @@
 			snackbar.show({ type: 'success', message: 'Run เสร็จสิ้น', autoClose: 5000 });
 		} catch (e: any) {
 			log(`❌ เกิดข้อผิดพลาด: ${e?.message ?? String(e)}`);
-			snackbar.show({ type: 'error', message: `Run ผิดพลาด: ${e?.message ?? String(e)}` });
+			runErrorSnackbarId = snackbar.show({ type: 'error', message: `Run ผิดพลาด: ${e?.message ?? String(e)}` });
 		} finally {
 			isRunning = false;
 		}

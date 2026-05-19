@@ -24,7 +24,8 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\sonth\\\\GitHub\\\\duinoclaw\\\\lib\\\\duinoclaw\" -Recurse)",
       "Bash(Select-Object FullName)",
       "Bash(ls -R \"C:\\\\Users\\\\sonth\\\\GitHub\\\\duinoclaw\\\\lib\\\\duinoclaw\")",
-      "Read(//c/Users/sonth/GitHub/duinoclaw/lib/duinoclaw/**)"
+      "Read(//c/Users/sonth/GitHub/duinoclaw/lib/duinoclaw/**)",
+      "Bash(python3 -)"
     ],
     "additionalDirectories": [
       "c:\\Users\\sonth\\GitHub\\ui-click\\src\\lib"
