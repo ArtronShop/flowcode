@@ -1,24 +1,29 @@
 <script lang="ts">
-	import { StickyNote, Copy, BookOpen, Trash2 } from 'lucide-svelte';
+	import { StickyNote, Copy, ClipboardPaste, BookOpen, Trash2 } from 'lucide-svelte';
 
 	interface Props {
 		x: number;
 		y: number;
 		onaddnote?: () => void;
+		oncopy?: () => void;
+		onpaste?: () => void;
 		onduplicate?: () => void;
 		onhelp?: () => void;
 		ondelete?: () => void;
 		onclose?: () => void;
+		hasClipboard?: boolean;
 	}
 
-	let { x, y, onaddnote, onduplicate, onhelp, ondelete, onclose }: Props = $props();
+	let { x, y, onaddnote, oncopy, onpaste, onduplicate, onhelp, ondelete, onclose, hasClipboard = false }: Props = $props();
 
 	const items = $derived([
-		{ label: 'เพิ่มโน็ต',  icon: StickyNote, action: onaddnote,  class: '' },
-		{ label: 'ทำซ้ำ',      icon: Copy,       action: onduplicate, class: '' },
-		{ label: 'วิธีใช้',    icon: BookOpen,   action: onhelp,      class: '' },
-		{ label: 'ลบ',         icon: Trash2,     action: ondelete,    class: 'text-red-400 hover:text-red-300' },
-	]);
+		{ label: 'Add Note',   icon: StickyNote,      action: onaddnote,   class: '', show: true },
+		{ label: 'Copy',       icon: Copy,            action: oncopy,      class: '', show: true },
+		{ label: 'Paste',      icon: ClipboardPaste,  action: onpaste,     class: '', show: hasClipboard },
+		{ label: 'Duplicate',  icon: Copy,            action: onduplicate, class: '', show: true },
+		{ label: 'Help',       icon: BookOpen,        action: onhelp,      class: '', show: true },
+		{ label: 'Delete',     icon: Trash2,          action: ondelete,    class: 'text-red-400 hover:text-red-300', show: true },
+	].filter(i => i.show));
 
 	function pick(action?: () => void) {
 		action?.();
@@ -41,7 +46,7 @@
 		onkeydown={(e) => e.stopPropagation()}
 	>
 		{#each items as item, i}
-			{#if i === 3}
+			{#if item.label === 'Delete'}
 				<div class="my-1 border-t border-gray-700"></div>
 			{/if}
 			<button

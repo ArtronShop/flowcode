@@ -16,6 +16,7 @@
 	import { flowToC } from './engine.js';
 	import BlockContextMenu from '$lib/components/BlockContextMenu.svelte';
 	import Dropdown from '$lib/components/Dropdown.svelte';
+	import { ClipboardPaste } from 'lucide-svelte';
 
 	interface Props {
 		/** หมวดหมู่บล็อกที่แสดงในแผง Palette (default: ทุก category) */
@@ -70,6 +71,60 @@
 		if (base.length > MAX_HISTORY) base.shift();
 		history = base;
 		historyIndex = history.length - 1;
+	}
+
+	// ─── Clipboard (Copy / Paste / Duplicate) ───────────────────────
+	type ClipboardData = { blocks: CanvasBlock[]; conns: Connection[] };
+	let clipboard = $state<ClipboardData | null>(null);
+
+	function copySelected() {
+		const ids = new Set([
+			...(selectedBlockId ? [selectedBlockId] : []),
+			...selectedBlockIds,
+		]);
+		if (ids.size === 0) return;
+		clipboard = {
+			blocks: JSON.parse(JSON.stringify(canvasBlocks.filter(b => ids.has(b.id)))),
+			// เก็บเฉพาะ connection ที่ทั้งสองปลายอยู่ใน selection
+			conns:  JSON.parse(JSON.stringify(
+				connections.filter(c => ids.has(c.fromBlockId) && ids.has(c.toBlockId))
+			)),
+		};
+	}
+
+	function pasteClipboard(atMousePos = false) {
+		if (!clipboard || clipboard.blocks.length === 0) return;
+		let offsetX = 20, offsetY = 20;
+		if (atMousePos) {
+			// วางจุดกึ่งกลางของกลุ่มไว้ที่ตำแหน่ง mouse
+			const minX = Math.min(...clipboard.blocks.map(b => b.x));
+			const maxX = Math.max(...clipboard.blocks.map(b => b.x + BLOCK_WIDTH));
+			const minY = Math.min(...clipboard.blocks.map(b => b.y));
+			const maxY = Math.max(...clipboard.blocks.map(b => b.y + blockHeight(b)));
+			offsetX = mousePos.x - (minX + maxX) / 2;
+			offsetY = mousePos.y - (minY + maxY) / 2;
+		}
+		const idMap = new Map<string, string>();
+		const newBlocks: CanvasBlock[] = clipboard.blocks.map(b => {
+			const newId = `block-${nextId++}`;
+			idMap.set(b.id, newId);
+			return { ...JSON.parse(JSON.stringify(b)), id: newId, x: snap(b.x + offsetX), y: snap(b.y + offsetY) };
+		});
+		const newConns: Connection[] = clipboard.conns.map(c => ({
+			...c,
+			id:          `conn-${nextId++}`,
+			fromBlockId: idMap.get(c.fromBlockId) ?? c.fromBlockId,
+			toBlockId:   idMap.get(c.toBlockId)   ?? c.toBlockId,
+		}));
+		canvasBlocks = [...canvasBlocks, ...newBlocks];
+		connections  = [...connections,  ...newConns];
+		// Select pasted blocks
+		selectedBlockIds = new Set(newBlocks.map(b => b.id));
+		selectedBlockId  = null;
+		selectedConnIds  = new Set();
+		selectedConnId   = null;
+		saveHistory();
+		onchange?.('block:add');
 	}
 
 	function undo() {
@@ -155,6 +210,9 @@
 	let draggingConnEnd = $state<{ connId: string; end: 'from' | 'to' } | null>(null);
 	let searchQuery = $state('');
 	let contextMenu = $state<{ x: number; y: number; blockId: string } | null>(null);
+	let contextMenuCanvasPos = $state({ x: 0, y: 0 }); // canvas coords เมื่อ right-click
+	let canvasContextMenu = $state<{ x: number; y: number } | null>(null);
+	let canvasContextMenuPos = $state({ x: 0, y: 0 });
 
 	const connectingDataType = $derived<DataType | null>(
 		connectingFrom
@@ -550,10 +608,18 @@
 	function handleKeyDown(e: KeyboardEvent) {
 		const active = document.activeElement;
 		const isInput = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
-		// Undo / Redo — use e.code (physical key) so it works with any keyboard layout
+		// Undo / Redo / Copy / Paste / Duplicate — use e.code for any keyboard layout
 		if (e.ctrlKey && !isInput) {
 			if (e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); undo(); return; }
 			if (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey)) { e.preventDefault(); redo(); return; }
+			if (e.code === 'KeyC') { e.preventDefault(); copySelected(); return; }
+			if (e.code === 'KeyV') { e.preventDefault(); pasteClipboard(true); return; }
+			if (e.code === 'KeyD') {
+				e.preventDefault();
+				const ids = [...(selectedBlockId ? [selectedBlockId] : []), ...selectedBlockIds];
+				for (const id of ids) duplicateBlock(id);
+				return;
+			}
 		}
 		if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput) {
 			if (selectedBlockIds.size > 0) {
@@ -943,6 +1009,14 @@
 		onpointerup={handleCanvasMouseUp}
 		onclick={handleCanvasClick}
 		onwheel={handleWheel}
+		oncontextmenu={(e) => {
+			if (e.target instanceof SVGElement) return;
+			e.preventDefault(); // ป้องกัน browser native context menu เสมอ
+			if (clipboard) {
+				canvasContextMenu = { x: e.clientX, y: e.clientY };
+				canvasContextMenuPos = toCanvasCoords(e.clientX, e.clientY);
+			}
+		}}
 	>
 		<!-- Transform wrapper (zoom + pan) -->
 		<div style="position:absolute; width:100%; height:100%; transform:translate({panX}px,{panY}px) scale({zoom}); transform-origin:0 0;">
@@ -1060,6 +1134,7 @@
 						if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
 						e.preventDefault(); e.stopPropagation();
 						contextMenu = { x: e.clientX, y: e.clientY, blockId: block.id };
+					contextMenuCanvasPos = toCanvasCoords(e.clientX, e.clientY);
 					}}
 				>
 					<div
@@ -1224,12 +1299,61 @@
 			<BlockContextMenu
 				x={contextMenu.x}
 				y={contextMenu.y}
+				hasClipboard={clipboard !== null}
 				onaddnote={() => editNote(menuBlockId)}
+				oncopy={() => {
+					// ถ้า block ที่ right-click ไม่ได้ถูก select ให้ select เฉพาะอันนั้นก่อน
+					if (menuBlockId !== selectedBlockId && !selectedBlockIds.has(menuBlockId)) {
+						selectedBlockId = menuBlockId;
+						selectedBlockIds = new Set();
+					}
+					copySelected();
+				}}
+				onpaste={() => {
+					// วางที่ตำแหน่งที่ right-click
+					const saved = mousePos;
+					mousePos = contextMenuCanvasPos;
+					pasteClipboard(true);
+					mousePos = saved;
+				}}
 				onduplicate={() => duplicateBlock(menuBlockId)}
 				onhelp={() => { const def = defMap[canvasBlocks.find((b) => b.id === menuBlockId)?.typeId ?? '']; if (def) onhelp?.(def); contextMenu = null; }}
 				ondelete={() => { deleteBlock(menuBlockId); if (selectedBlockId === menuBlockId) selectedBlockId = null; }}
 				onclose={() => { contextMenu = null; }}
 			/>
+		{/if}
+
+		<!-- Canvas context menu (empty space right-click) -->
+		{#if canvasContextMenu}
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="fixed inset-0 z-50"
+				onclick={() => { canvasContextMenu = null; }}
+				oncontextmenu={(e) => { e.preventDefault(); canvasContextMenu = null; }}
+				onkeydown={(e) => e.key === 'Escape' && (canvasContextMenu = null)}
+			>
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div
+					class="absolute overflow-hidden rounded-xl border border-gray-700 bg-gray-800 py-1 shadow-2xl"
+					style="left:{canvasContextMenu.x}px; top:{canvasContextMenu.y}px;"
+					onclick={(e) => e.stopPropagation()}
+					onkeydown={(e) => e.stopPropagation()}
+				>
+					<button
+						class="flex w-full items-center gap-2.5 px-3.5 py-2 text-xs text-gray-300 transition-colors hover:bg-gray-700 whitespace-nowrap"
+						onclick={() => {
+							const saved = mousePos;
+							mousePos = canvasContextMenuPos;
+							pasteClipboard(true);
+							mousePos = saved;
+							canvasContextMenu = null;
+						}}
+					>
+						<ClipboardPaste size={14} />
+						Paste
+					</button>
+				</div>
+			</div>
 		{/if}
 
 		<!-- FAB: Zoom controls -->
