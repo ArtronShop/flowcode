@@ -127,6 +127,43 @@
 		onchange?.('block:add');
 	}
 
+	// ─── Function Registry ───────────────────────────────────────────
+	// Scans canvasBlocks for func_define blocks, builds signature map
+	type FuncSig = { returnType: string; params: { name: string; type: string }[] };
+
+	function computeFuncRegistry(): Record<string, FuncSig> {
+		const reg: Record<string, FuncSig> = {};
+		for (const b of canvasBlocks) {
+			if (b.typeId !== 'func_define') continue;
+			const p = b.params;
+			const name = (p.func_name as string) ?? '';
+			if (!name) continue;
+			const count = Math.min(6, Math.max(0, Number(p.param_count ?? '0')));
+			const params = Array.from({ length: count }, (_, i) => ({
+				name: (p[`param${i + 1}_name`] as string) ?? `p${i + 1}`,
+				type: (p[`param${i + 1}_type`] as string) ?? 'int',
+			}));
+			reg[name] = { returnType: (p.return_type as string) ?? 'void', params };
+		}
+		return reg;
+	}
+
+	// Refresh ports of func_call/func_get_param blocks after func_define changes
+	function refreshFuncCallPorts() {
+		const regStr = JSON.stringify(computeFuncRegistry());
+		canvasBlocks = canvasBlocks.map(b => {
+			if (b.typeId !== 'func_call' && b.typeId !== 'func_get_param') return b;
+			const d = defMap[b.typeId];
+			if (!d?.dynamicPorts) return b;
+			const dyn = d.dynamicPorts({ ...b.params, __funcRegistry: regStr });
+			return {
+				...b,
+				inputs:  dyn.inputs  ? dyn.inputs.map(p  => ({ ...p })) : b.inputs,
+				outputs: dyn.outputs ? dyn.outputs.map(p => ({ ...p })) : b.outputs,
+			};
+		});
+	}
+
 	function undo() {
 		if (historyIndex <= 0) return;
 		historyIndex--;
@@ -314,7 +351,7 @@
 		const cc = toCanvasCoords(clientX, clientY);
 		const src = draggingFromPalette;
 		const defaultParams = Object.fromEntries((src.params ?? []).map((p) => [p.id, paramDefault(p)]));
-		const dynPorts = src.dynamicPorts?.(defaultParams);
+		const dynPorts = src.dynamicPorts?.({ ...defaultParams, __funcRegistry: JSON.stringify(computeFuncRegistry()) });
 		canvasBlocks = [
 			...canvasBlocks,
 			{
@@ -340,6 +377,12 @@
 	// ─── Block drag ──────────────────────────────────────────────────
 	function handleBlockMouseDown(e: PointerEvent, block: CanvasBlock) {
 		if ((e.target as HTMLElement).closest('.port-btn')) return;
+		// Don't preventDefault on interactive elements — preventDefault on pointerdown
+		// suppresses subsequent mousedown events, breaking Dropdown and other controls.
+		if ((e.target as HTMLElement).closest('button, input, textarea, select, a, [role="combobox"], [role="listbox"]')) {
+			e.stopPropagation();
+			return;
+		}
 		e.preventDefault();
 		e.stopPropagation();
 		(document.activeElement as HTMLElement)?.blur();
@@ -802,7 +845,8 @@
 			if (b.id !== blockId) return b;
 			const newParams = { ...(b.params ?? {}), [paramId]: value };
 			if (!def?.dynamicPorts) return { ...b, params: newParams };
-			const dyn = def.dynamicPorts(newParams);
+			const augmented = { ...newParams, __funcRegistry: JSON.stringify(computeFuncRegistry()) };
+			const dyn = def.dynamicPorts(augmented);
 			return {
 				...b,
 				params: newParams,
@@ -824,6 +868,9 @@
 				});
 			}
 		}
+
+		// เมื่อ func_define เปลี่ยน → update ports ของ func_call/func_get_param
+		if (def?.id === 'func_define') refreshFuncCallPorts();
 
 		saveHistory();
 		onchange?.('block:param');
@@ -978,7 +1025,13 @@
 
 	// ─── Code generation ─────────────────────────────────────────────
 	export function generateCode() {
-		return flowToC(canvasBlocks, connections, defMap);
+		const regStr = JSON.stringify(computeFuncRegistry());
+		const blocks = canvasBlocks.map(b =>
+			(b.typeId === 'func_call' || b.typeId === 'func_get_param')
+				? { ...b, params: { ...b.params, __funcRegistry: regStr } }
+				: b
+		);
+		return flowToC(blocks, connections, defMap);
 	}
 </script>
 
