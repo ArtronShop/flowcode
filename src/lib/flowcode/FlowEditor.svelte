@@ -92,6 +92,22 @@
 		};
 	}
 
+	function deleteSelected() {
+		const blockIds = new Set([...selectedBlockIds, ...(selectedBlockId ? [selectedBlockId] : [])]);
+		for (const id of blockIds) deleteBlock(id);
+		const connIds = new Set([...selectedConnIds, ...(selectedConnId ? [selectedConnId] : [])]);
+		for (const id of connIds) deleteConnection(id);
+		selectedBlockIds = new Set();
+		selectedBlockId = null;
+		selectedConnIds = new Set();
+		selectedConnId = null;
+	}
+
+	function cutSelected() {
+		copySelected();
+		deleteSelected();
+	}
+
 	function pasteClipboard(atMousePos = false) {
 		if (!clipboard || clipboard.blocks.length === 0) return;
 		let offsetX = 20, offsetY = 20;
@@ -132,20 +148,7 @@
 	type FuncSig = { returnType: string; params: { name: string; type: string }[] };
 
 	function computeFuncRegistry(): Record<string, FuncSig> {
-		const reg: Record<string, FuncSig> = {};
-		for (const b of canvasBlocks) {
-			if (b.typeId !== 'func_define') continue;
-			const p = b.params;
-			const name = (p.func_name as string) ?? '';
-			if (!name) continue;
-			const count = Math.min(6, Math.max(0, Number(p.param_count ?? '0')));
-			const params = Array.from({ length: count }, (_, i) => ({
-				name: (p[`param${i + 1}_name`] as string) ?? `p${i + 1}`,
-				type: (p[`param${i + 1}_type`] as string) ?? 'int',
-			}));
-			reg[name] = { returnType: (p.return_type as string) ?? 'void', params };
-		}
-		return reg;
+		return buildFuncRegistry(canvasBlocks);
 	}
 
 	// Refresh ports of func_call/func_get_param/func_return blocks after func_define changes
@@ -222,7 +225,7 @@
 			updateBlockParam(blockId, paramId, value);
 			return;
 		}
-		const name = window.prompt(`ชื่อตัวแปรใหม่ (${category}):`);
+		const name = window.prompt(`New variable name (${category}):`);
 		if (!name || !name.trim()) return;
 		const trimmed = name.trim().replace(/[^a-zA-Z0-9_]/g, '_');
 		if (!varnameRegistry[category]) varnameRegistry[category] = [];
@@ -250,6 +253,7 @@
 	let contextMenuCanvasPos = $state({ x: 0, y: 0 }); // canvas coords เมื่อ right-click
 	let canvasContextMenu = $state<{ x: number; y: number } | null>(null);
 	let canvasContextMenuPos = $state({ x: 0, y: 0 });
+	let rubberBand = $state<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
 
 	const connectingDataType = $derived<DataType | null>(
 		connectingFrom
@@ -266,6 +270,7 @@
 	let isPanning = $state(false);
 	let panStart = { x: 0, y: 0 };
 	let didPan = false; // true เมื่อขยับเมาส์ขณะ pan (ไม่ใช่แค่คลิก)
+	let didRubberBand = false; // true หลัง rubber band selection เสร็จ เพื่อกัน click ล้าง selection
 
 	let canvas: HTMLElement;
 
@@ -476,6 +481,12 @@
 			return;
 		}
 
+		if (rubberBand) {
+			const cc = toCanvasCoords(e.clientX, e.clientY);
+			rubberBand = { ...rubberBand, endX: cc.x, endY: cc.y };
+			return;
+		}
+
 		if (isPanning) {
 			didPan = true;
 			panX += e.clientX - panStart.x;
@@ -530,6 +541,15 @@
 		if (t.closest('.port-btn')) return;
 		if (t instanceof SVGPathElement || t instanceof SVGCircleElement) return;
 		if (connectingFrom || draggingConnEnd) return;
+
+		// Ctrl+drag = rubber band selection
+		if (e.ctrlKey && e.button === 0) {
+			const cc = toCanvasCoords(e.clientX, e.clientY);
+			rubberBand = { startX: cc.x, startY: cc.y, endX: cc.x, endY: cc.y };
+			canvas.setPointerCapture(e.pointerId);
+			return;
+		}
+
 		isPanning = true;
 		didPan = false;
 		panStart = { x: e.clientX, y: e.clientY };
@@ -539,6 +559,24 @@
 	function handleCanvasMouseUp(e?: PointerEvent) {
 		// Clean up pointer tracking
 		if (e) activePointers.delete(e.pointerId);
+
+		if (rubberBand) {
+			const minX = Math.min(rubberBand.startX, rubberBand.endX);
+			const maxX = Math.max(rubberBand.startX, rubberBand.endX);
+			const minY = Math.min(rubberBand.startY, rubberBand.endY);
+			const maxY = Math.max(rubberBand.startY, rubberBand.endY);
+			const selected = canvasBlocks.filter(b =>
+				b.x < maxX && b.x + BLOCK_WIDTH > minX && b.y < maxY && b.y + blockHeight(b) > minY
+			);
+			selectedBlockId = null;
+			selectedBlockIds = new Set(selected.map(b => b.id));
+			selectedConnIds = new Set(
+				connections.filter(c => selectedBlockIds.has(c.fromBlockId) && selectedBlockIds.has(c.toBlockId)).map(c => c.id)
+			);
+			rubberBand = null;
+			didRubberBand = true; // prevent the subsequent click event from clearing selection
+			return;
+		}
 
 		if (isPanning) {
 			isPanning = false;
@@ -592,8 +630,8 @@
 	}
 
 	function handleCanvasClick() {
-		// ถ้าเพิ่งเลื่อน canvas (pan) ให้ข้ามการ deselect
 		if (didPan) { didPan = false; return; }
+		if (didRubberBand) { didRubberBand = false; return; }
 		connectingFrom = null;
 		const hadBlock = selectedBlockId !== null || selectedBlockIds.size > 0;
 		const hadConn = selectedConnId !== null || selectedConnIds.size > 0;
@@ -656,6 +694,7 @@
 			if (e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); undo(); return; }
 			if (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey)) { e.preventDefault(); redo(); return; }
 			if (e.code === 'KeyC') { e.preventDefault(); copySelected(); return; }
+			if (e.code === 'KeyX') { e.preventDefault(); cutSelected(); return; }
 			if (e.code === 'KeyV') { e.preventDefault(); pasteClipboard(true); return; }
 			if (e.code === 'KeyD') {
 				e.preventDefault();
@@ -923,7 +962,7 @@
 	function editNote(blockId: string) {
 		let b = canvasBlocks.find((b) => b.id === blockId);
 		if (!b) return; // not found block id
-		const newNote = prompt('ข้อความที่ต้องการโน็ต', b.note);
+		const newNote = prompt('Note text', b.note);
 		if (newNote == null) return; // Cancel
 		b.note = newNote;
 		saveHistory();
@@ -940,6 +979,7 @@
 	}
 
 	export function getZoom() { return zoom; }
+	export function getViewport() { return { zoom, panX, panY }; }
 	export function getIsConnecting() { return connectingFrom !== null; }
 	export function getSelectedBlock() { return canvasBlocks.find((b) => b.id === selectedBlockId) ?? null; }
 	export function getSelectedConn() { return selectedConnId !== null; }
@@ -948,7 +988,7 @@
 		return JSON.stringify({ canvasBlocks, connections, varnameRegistry }, null, 2);
 	}
 
-	export function importJson(text: string) {
+	export function importJson(text: string, viewport?: { zoom: number; panX: number; panY: number }) {
 		try {
 			const data = JSON.parse(text);
 			if (Array.isArray(data.canvasBlocks) && Array.isArray(data.connections)) {
@@ -960,16 +1000,18 @@
 				const ids = canvasBlocks.map((b) => parseInt(b.id.replace('block-', '')) || 0);
 				const connIds = connections.map((c) => parseInt(c.id.replace('conn-', '')) || 0);
 				nextId = Math.max(0, ...ids, ...connIds) + 1;
-				// Reset history on project load so undo doesn't go into previous project
 				history = [];
 				historyIndex = -1;
 				saveHistory();
 				onchange?.('project:load');
-				// embed: fit ให้พอดีหน้าจอ | ปกติ: reset zoom=1 แล้ว center
-				requestAnimationFrame(() => embed ? focusCanvas() : zoomReset());
+				if (viewport) {
+					requestAnimationFrame(() => { zoom = viewport.zoom; panX = viewport.panX; panY = viewport.panY; });
+				} else {
+					requestAnimationFrame(() => embed ? focusCanvas() : zoomReset());
+				}
 			}
 		} catch {
-			console.error('ไม่สามารถโหลดไฟล์โปรเจคได้');
+			console.error('Failed to load project file');
 		}
 	}
 
@@ -1024,15 +1066,42 @@
 	}
 
 	// ─── Code generation ─────────────────────────────────────────────
-	export function generateCode() {
-		const regStr = JSON.stringify(computeFuncRegistry());
+	function buildFuncRegistry(blocks: CanvasBlock[]): Record<string, FuncSig> {
+		const reg: Record<string, FuncSig> = {};
+		for (const b of blocks) {
+			if (b.typeId !== 'func_define') continue;
+			const p = b.params;
+			const name = (p.func_name as string) ?? '';
+			if (!name) continue;
+			const count = Math.min(6, Math.max(0, Number(p.param_count ?? '0')));
+			const params = Array.from({ length: count }, (_, i) => ({
+				name: (p[`param${i + 1}_name`] as string) ?? `p${i + 1}`,
+				type: (p[`param${i + 1}_type`] as string) ?? 'int',
+			}));
+			reg[name] = { returnType: (p.return_type as string) ?? 'void', params };
+		}
+		return reg;
+	}
+
+	function injectFuncRegistry(blocks: CanvasBlock[], reg: Record<string, FuncSig>): CanvasBlock[] {
+		const regStr = JSON.stringify(reg);
 		const funcBlocks = new Set(['func_call', 'func_get_param', 'func_return']);
-		const blocks = canvasBlocks.map(b =>
+		return blocks.map(b =>
 			funcBlocks.has(b.typeId)
 				? { ...b, params: { ...b.params, __funcRegistry: regStr } }
 				: b
 		);
-		return flowToC(blocks, connections, defMap);
+	}
+
+	export function generateCode() {
+		const reg = buildFuncRegistry(canvasBlocks);
+		return flowToC(injectFuncRegistry(canvasBlocks, reg), connections, defMap);
+	}
+
+	/** Generate code from pre-merged blocks+connections (multi-file). */
+	export function generateCodeFromData(allBlocks: CanvasBlock[], allConns: Connection[]): string {
+		const reg = buildFuncRegistry(allBlocks);
+		return flowToC(injectFuncRegistry(allBlocks, reg), allConns, defMap);
 	}
 </script>
 
@@ -1054,7 +1123,7 @@
 	<div
 		bind:this={canvas}
 		class="relative flex-1 overflow-hidden touch-none"
-		style="background-color:#0d1117; background-image: radial-gradient(circle, #1e293b 1px, transparent 1px); background-size: {GRID_SIZE * zoom}px {GRID_SIZE * zoom}px; background-position: {panX % (GRID_SIZE * zoom)}px {panY % (GRID_SIZE * zoom)}px; cursor: {isPanning ? 'grabbing' : 'grab'};"
+		style="background-color:#0d1117; background-image: radial-gradient(circle, #1e293b 1px, transparent 1px); background-size: {GRID_SIZE * zoom}px {GRID_SIZE * zoom}px; background-position: {panX % (GRID_SIZE * zoom)}px {panY % (GRID_SIZE * zoom)}px; cursor: {rubberBand ? 'crosshair' : isPanning ? 'grabbing' : 'grab'};"
 		role="application"
 		tabindex="-1"
 		aria-label="Flow canvas"
@@ -1102,7 +1171,7 @@
 						onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); if (selectedBlockId) { selectedBlockId = null; onchange?.('block:blur'); } selectedConnId = conn.id; onchange?.('conn:focus'); } }}
 						role="button"
 						tabindex="0"
-						aria-label="เลือกการเชื่อมต่อ"
+						aria-label="Select connection"
 						class="conn-group"
 					>
 						<path d={connPath(conn)} fill="none" stroke="transparent" stroke-width="12" />
@@ -1415,7 +1484,7 @@
 			<button
 				onclick={() => zoomAround(1.2)}
 				class="flex h-9 w-9 items-center justify-center rounded-full bg-gray-800 border border-gray-700 text-gray-300 shadow-lg transition-all hover:bg-gray-700 hover:text-white hover:scale-110"
-				title="ซูมเข้า"
+				title="Zoom in"
 			>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -1433,7 +1502,7 @@
 			<button
 				onclick={() => zoomAround(0.8)}
 				class="flex h-9 w-9 items-center justify-center rounded-full bg-gray-800 border border-gray-700 text-gray-300 shadow-lg transition-all hover:bg-gray-700 hover:text-white hover:scale-110"
-				title="ซูมออก"
+				title="Zoom out"
 			>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
@@ -1449,10 +1518,22 @@
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1"
 							d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
 					</svg>
-					<p class="text-base font-medium text-gray-600">ลากบล็อกจากแผงด้านขวามาวางที่นี่</p>
-					<p class="mt-1 text-xs text-gray-700">เชื่อมต่อบล็อกด้วยการคลิกที่พอร์ตสีเขียว แล้วคลิกพอร์ตสีน้ำเงิน</p>
+					<p class="text-base font-medium text-gray-600">Drag blocks from the right panel</p>
+					<p class="mt-1 text-xs text-gray-700">Click an Output port, then an Input port to connect</p>
 				</div>
 			</div>
+		{/if}
+
+		<!-- Rubber band selection rectangle -->
+		{#if rubberBand}
+			{@const rbX = Math.min(rubberBand.startX, rubberBand.endX) * zoom + panX}
+			{@const rbY = Math.min(rubberBand.startY, rubberBand.endY) * zoom + panY}
+			{@const rbW = Math.abs(rubberBand.endX - rubberBand.startX) * zoom}
+			{@const rbH = Math.abs(rubberBand.endY - rubberBand.startY) * zoom}
+			<div
+				class="pointer-events-none absolute border border-blue-400 bg-blue-400/10"
+				style="left:{rbX}px; top:{rbY}px; width:{rbW}px; height:{rbH}px; z-index:15;"
+			></div>
 		{/if}
 
 		<!-- Palette drag ghost -->
@@ -1469,15 +1550,15 @@
 		<!-- Hints -->
 		{#if connectingFrom}
 			<div class="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-yellow-500/20 border border-yellow-500/40 px-4 py-1.5">
-				<p class="text-xs text-yellow-300">ปล่อยเมาส์ที่จุด Input เพื่อเชื่อมต่อ — ปล่อยเมาส์พื้นที่ว่างเพื่อยกเลิก</p>
+				<p class="text-xs text-yellow-300">Release on an Input port to connect — release on empty space to cancel</p>
 			</div>
 		{:else if selectedBlockId}
 			<div class="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-blue-500/20 border border-blue-500/40 px-4 py-1.5">
-				<p class="text-xs text-blue-300">บล็อกถูกเลือก — กด <kbd class="rounded bg-blue-900/60 px-1 font-mono">Delete</kbd> เพื่อลบ</p>
+				<p class="text-xs text-blue-300">Block selected — press <kbd class="rounded bg-blue-900/60 px-1 font-mono">Delete</kbd> to remove</p>
 			</div>
 		{:else if selectedConnId}
 			<div class="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-yellow-500/20 border border-yellow-500/40 px-4 py-1.5">
-				<p class="text-xs text-yellow-300">เส้นถูกเลือก — กด <kbd class="rounded bg-yellow-900/60 px-1 font-mono">Delete</kbd> เพื่อลบ หรือลากจุดสีเหลืองเพื่อย้าย</p>
+				<p class="text-xs text-yellow-300">Connection selected — press <kbd class="rounded bg-yellow-900/60 px-1 font-mono">Delete</kbd> to remove, or drag the yellow dot to move</p>
 			</div>
 		{/if}
 	</div>
@@ -1513,7 +1594,7 @@
 								style="border-color:{block.color}30; background:linear-gradient(135deg,{block.color}12,{block.color}06);"
 								role="button"
 								tabindex="0"
-								aria-label="บล็อก {block.name}"
+								aria-label="Block: {block.name}"
 							>
 								<div
 									class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-bold"
@@ -1534,7 +1615,7 @@
 			{/each}
 
 			{#if filteredCategories.length === 0}
-				<p class="mt-4 text-center text-xs text-gray-600">ไม่พบบล็อกที่ค้นหา</p>
+				<p class="mt-4 text-center text-xs text-gray-600">No blocks found</p>
 			{/if}
 		</div>
 	</aside>

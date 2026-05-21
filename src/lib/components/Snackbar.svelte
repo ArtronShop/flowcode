@@ -60,7 +60,7 @@
             <button
                 onclick={() => snackbar.close(item.id)}
                 class="shrink-0 mt-0.5 rounded p-0.5 text-gray-500 hover:bg-gray-700 hover:text-gray-300 transition-colors"
-                aria-label="ปิด"
+                aria-label="Close"
             >
                 <X size={13} />
             </button>

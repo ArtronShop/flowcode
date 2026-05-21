@@ -29,7 +29,7 @@
 		onchange,
 		disabled = false,
 		placeholder = '-',
-		emptyText = 'ไม่มีตัวเลือก',
+		emptyText = 'No options',
 		class: cls = '',
 		style = '',
 		onmousedown,
