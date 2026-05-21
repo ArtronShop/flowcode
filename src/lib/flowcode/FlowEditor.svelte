@@ -148,11 +148,11 @@
 		return reg;
 	}
 
-	// Refresh ports of func_call/func_get_param blocks after func_define changes
+	// Refresh ports of func_call/func_get_param/func_return blocks after func_define changes
 	function refreshFuncCallPorts() {
 		const regStr = JSON.stringify(computeFuncRegistry());
 		canvasBlocks = canvasBlocks.map(b => {
-			if (b.typeId !== 'func_call' && b.typeId !== 'func_get_param') return b;
+			if (b.typeId !== 'func_call' && b.typeId !== 'func_get_param' && b.typeId !== 'func_return') return b;
 			const d = defMap[b.typeId];
 			if (!d?.dynamicPorts) return b;
 			const dyn = d.dynamicPorts({ ...b.params, __funcRegistry: regStr });
@@ -1026,8 +1026,9 @@
 	// ─── Code generation ─────────────────────────────────────────────
 	export function generateCode() {
 		const regStr = JSON.stringify(computeFuncRegistry());
+		const funcBlocks = new Set(['func_call', 'func_get_param', 'func_return']);
 		const blocks = canvasBlocks.map(b =>
-			(b.typeId === 'func_call' || b.typeId === 'func_get_param')
+			funcBlocks.has(b.typeId)
 				? { ...b, params: { ...b.params, __funcRegistry: regStr } }
 				: b
 		);
@@ -1249,7 +1250,7 @@
 												style="height:{PARAM_INPUT_H}px; font-size:10px;"
 											/>
 										{:else if pDef.type === 'option'}
-											{@const resolvedOptions = typeof pDef.options === 'function' ? pDef.options(block.params ?? {}) : pDef.options}
+											{@const resolvedOptions = typeof pDef.options === 'function' ? pDef.options({ ...(block.params ?? {}), __funcRegistry: JSON.stringify(computeFuncRegistry()) }) : pDef.options}
 											<Dropdown
 												value={pVal}
 												options={resolvedOptions}

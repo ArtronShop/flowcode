@@ -29,7 +29,6 @@ function parseFuncRegistry(params: Record<string, string | string[]>): Record<st
 export const functionCategory: BlockCategory = {
     name: 'Function',
     blocks: [
-
         // ─── Function Define ─────────────────────────────────────────
         {
             id: 'func_define',
@@ -92,7 +91,7 @@ export const functionCategory: BlockCategory = {
             icon: 'ƒ↑',
             category: 'function',
             description: 'ดึงค่า parameter ของฟังก์ชั่นมาใช้\nวางได้ทุกที่ใน body ของฟังก์ชั่น',
-            inputs: [],
+            inputs: [{ id: 'in',    type: 'input', label: '➜',     dataType: 'any' }],
             outputs: [{ id: 'value', type: 'output', label: 'Value', dataType: 'any' }],
             params: [
                 { id: 'func_name', type: 'varname' as const, category: 'user_func', label: 'Function', default: 'myFunc' },
