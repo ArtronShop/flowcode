@@ -92,6 +92,22 @@
 		};
 	}
 
+	function deleteSelected() {
+		const blockIds = new Set([...selectedBlockIds, ...(selectedBlockId ? [selectedBlockId] : [])]);
+		for (const id of blockIds) deleteBlock(id);
+		const connIds = new Set([...selectedConnIds, ...(selectedConnId ? [selectedConnId] : [])]);
+		for (const id of connIds) deleteConnection(id);
+		selectedBlockIds = new Set();
+		selectedBlockId = null;
+		selectedConnIds = new Set();
+		selectedConnId = null;
+	}
+
+	function cutSelected() {
+		copySelected();
+		deleteSelected();
+	}
+
 	function pasteClipboard(atMousePos = false) {
 		if (!clipboard || clipboard.blocks.length === 0) return;
 		let offsetX = 20, offsetY = 20;
@@ -237,6 +253,7 @@
 	let contextMenuCanvasPos = $state({ x: 0, y: 0 }); // canvas coords เมื่อ right-click
 	let canvasContextMenu = $state<{ x: number; y: number } | null>(null);
 	let canvasContextMenuPos = $state({ x: 0, y: 0 });
+	let rubberBand = $state<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
 
 	const connectingDataType = $derived<DataType | null>(
 		connectingFrom
@@ -253,6 +270,7 @@
 	let isPanning = $state(false);
 	let panStart = { x: 0, y: 0 };
 	let didPan = false; // true เมื่อขยับเมาส์ขณะ pan (ไม่ใช่แค่คลิก)
+	let didRubberBand = false; // true หลัง rubber band selection เสร็จ เพื่อกัน click ล้าง selection
 
 	let canvas: HTMLElement;
 
@@ -463,6 +481,12 @@
 			return;
 		}
 
+		if (rubberBand) {
+			const cc = toCanvasCoords(e.clientX, e.clientY);
+			rubberBand = { ...rubberBand, endX: cc.x, endY: cc.y };
+			return;
+		}
+
 		if (isPanning) {
 			didPan = true;
 			panX += e.clientX - panStart.x;
@@ -517,6 +541,15 @@
 		if (t.closest('.port-btn')) return;
 		if (t instanceof SVGPathElement || t instanceof SVGCircleElement) return;
 		if (connectingFrom || draggingConnEnd) return;
+
+		// Ctrl+drag = rubber band selection
+		if (e.ctrlKey && e.button === 0) {
+			const cc = toCanvasCoords(e.clientX, e.clientY);
+			rubberBand = { startX: cc.x, startY: cc.y, endX: cc.x, endY: cc.y };
+			canvas.setPointerCapture(e.pointerId);
+			return;
+		}
+
 		isPanning = true;
 		didPan = false;
 		panStart = { x: e.clientX, y: e.clientY };
@@ -526,6 +559,24 @@
 	function handleCanvasMouseUp(e?: PointerEvent) {
 		// Clean up pointer tracking
 		if (e) activePointers.delete(e.pointerId);
+
+		if (rubberBand) {
+			const minX = Math.min(rubberBand.startX, rubberBand.endX);
+			const maxX = Math.max(rubberBand.startX, rubberBand.endX);
+			const minY = Math.min(rubberBand.startY, rubberBand.endY);
+			const maxY = Math.max(rubberBand.startY, rubberBand.endY);
+			const selected = canvasBlocks.filter(b =>
+				b.x < maxX && b.x + BLOCK_WIDTH > minX && b.y < maxY && b.y + blockHeight(b) > minY
+			);
+			selectedBlockId = null;
+			selectedBlockIds = new Set(selected.map(b => b.id));
+			selectedConnIds = new Set(
+				connections.filter(c => selectedBlockIds.has(c.fromBlockId) && selectedBlockIds.has(c.toBlockId)).map(c => c.id)
+			);
+			rubberBand = null;
+			didRubberBand = true; // prevent the subsequent click event from clearing selection
+			return;
+		}
 
 		if (isPanning) {
 			isPanning = false;
@@ -579,8 +630,8 @@
 	}
 
 	function handleCanvasClick() {
-		// ถ้าเพิ่งเลื่อน canvas (pan) ให้ข้ามการ deselect
 		if (didPan) { didPan = false; return; }
+		if (didRubberBand) { didRubberBand = false; return; }
 		connectingFrom = null;
 		const hadBlock = selectedBlockId !== null || selectedBlockIds.size > 0;
 		const hadConn = selectedConnId !== null || selectedConnIds.size > 0;
@@ -643,6 +694,7 @@
 			if (e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); undo(); return; }
 			if (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey)) { e.preventDefault(); redo(); return; }
 			if (e.code === 'KeyC') { e.preventDefault(); copySelected(); return; }
+			if (e.code === 'KeyX') { e.preventDefault(); cutSelected(); return; }
 			if (e.code === 'KeyV') { e.preventDefault(); pasteClipboard(true); return; }
 			if (e.code === 'KeyD') {
 				e.preventDefault();
@@ -1071,7 +1123,7 @@
 	<div
 		bind:this={canvas}
 		class="relative flex-1 overflow-hidden touch-none"
-		style="background-color:#0d1117; background-image: radial-gradient(circle, #1e293b 1px, transparent 1px); background-size: {GRID_SIZE * zoom}px {GRID_SIZE * zoom}px; background-position: {panX % (GRID_SIZE * zoom)}px {panY % (GRID_SIZE * zoom)}px; cursor: {isPanning ? 'grabbing' : 'grab'};"
+		style="background-color:#0d1117; background-image: radial-gradient(circle, #1e293b 1px, transparent 1px); background-size: {GRID_SIZE * zoom}px {GRID_SIZE * zoom}px; background-position: {panX % (GRID_SIZE * zoom)}px {panY % (GRID_SIZE * zoom)}px; cursor: {rubberBand ? 'crosshair' : isPanning ? 'grabbing' : 'grab'};"
 		role="application"
 		tabindex="-1"
 		aria-label="Flow canvas"
@@ -1470,6 +1522,18 @@
 					<p class="mt-1 text-xs text-gray-700">Click an Output port, then an Input port to connect</p>
 				</div>
 			</div>
+		{/if}
+
+		<!-- Rubber band selection rectangle -->
+		{#if rubberBand}
+			{@const rbX = Math.min(rubberBand.startX, rubberBand.endX) * zoom + panX}
+			{@const rbY = Math.min(rubberBand.startY, rubberBand.endY) * zoom + panY}
+			{@const rbW = Math.abs(rubberBand.endX - rubberBand.startX) * zoom}
+			{@const rbH = Math.abs(rubberBand.endY - rubberBand.startY) * zoom}
+			<div
+				class="pointer-events-none absolute border border-blue-400 bg-blue-400/10"
+				style="left:{rbX}px; top:{rbY}px; width:{rbW}px; height:{rbH}px; z-index:15;"
+			></div>
 		{/if}
 
 		<!-- Palette drag ghost -->
