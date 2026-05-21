@@ -15,10 +15,10 @@
 
 	let {
 		open = $bindable(false),
-		title = 'ยืนยัน',
+		title = 'Confirm',
 		message = '',
-		confirmLabel = 'ยืนยัน',
-		cancelLabel = 'ยกเลิก',
+		confirmLabel = 'Confirm',
+		cancelLabel = 'Cancel',
 		hideCancel = false,
 		onconfirm,
 		oncancel,

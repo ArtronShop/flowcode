@@ -42,7 +42,7 @@
 	</div>
 {:else}
 	<div class="flex flex-1 items-center justify-center text-[11px] text-gray-600">
-		ยังไม่มีโค้ด วางบล็อกลงในพื้นที่ทำงานแล้วเชื่อมต่อกัน
+		No code yet. Add blocks to the canvas and connect them.
 	</div>
 {/if}
 

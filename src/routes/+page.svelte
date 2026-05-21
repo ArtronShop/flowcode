@@ -35,7 +35,7 @@
 		if (optMap.size === 0) return boardPart;
 		return `${boardPart}:${[...optMap.entries()].map(([k, v]) => `${k}=${v}`).join(',')}`;
 	}
-	import type { BlockCategory, BlockDef } from '$lib/blocks/types.js';
+	import type { BlockCategory, BlockDef, CanvasBlock, Connection } from '$lib/blocks/types.js';
 	import { FlowcodeAgentClient } from '$lib/agent-client/index.js';
 	import {
 		FilePlus, FolderOpen, Save, CirclePlay, SquareCode, SlidersHorizontal,
@@ -53,6 +53,112 @@
 	type ExtensionItem = ExtensionProps & {
 		installed: boolean;
 	};
+
+	// ─── Multi-file support ──────────────────────────────────────────────
+	type Viewport = { zoom: number; panX: number; panY: number };
+	type FlowFile = { id: string; name: string; json: string; viewport?: Viewport };
+
+	function _initProject(): { files: FlowFile[]; activeFileId: string } {
+		try {
+			const v2 = localStorage.getItem('flowcode-project-v2');
+			if (v2) {
+				const p = JSON.parse(v2);
+				if (Array.isArray(p.files) && p.files.length > 0)
+					return { files: p.files, activeFileId: p.activeFileId ?? p.files[0].id };
+			}
+			// migrate v1
+			const v1 = localStorage.getItem('flowcode-project');
+			const id = `f${Date.now()}`;
+			return { files: [{ id, name: 'main.flow', json: v1 ?? '' }], activeFileId: id };
+		} catch {
+			const id = `f${Date.now()}`;
+			return { files: [{ id, name: 'main.flow', json: '' }], activeFileId: id };
+		}
+	}
+
+	const _proj = _initProject();
+	let files = $state<FlowFile[]>(_proj.files);
+	let activeFileId = $state<string>(_proj.activeFileId);
+	let editingFileId = $state<string | null>(null);
+
+	$effect(() => {
+		localStorage.setItem('flowcode-project-v2', JSON.stringify({ files, activeFileId }));
+	});
+
+	function switchFile(id: string) {
+		if (id === activeFileId) return;
+		if (editor) {
+			const json = editor.exportJson();
+			const viewport = editor.getViewport();
+			files = files.map(f => f.id === activeFileId ? { ...f, json, viewport } : f);
+		}
+		activeFileId = id;
+		const target = files.find(f => f.id === id);
+		editor?.importJson(target?.json ?? '', target?.viewport);
+		cCode = generateAllCode();
+	}
+
+	function addFile() {
+		const id = `f${Date.now()}`;
+		const usedNames = new Set(files.map(f => f.name));
+		let n = files.length + 1;
+		while (usedNames.has(`sketch${n}.flow`)) n++;
+		const name = `sketch${n}.flow`;
+		if (editor) {
+			const json = editor.exportJson();
+			files = [...files.map(f => f.id === activeFileId ? { ...f, json } : f), { id, name, json: '' }];
+		} else {
+			files = [...files, { id, name, json: '' }];
+		}
+		activeFileId = id;
+		editor?.clear();
+		cCode = '';
+	}
+
+	function deleteFile(id: string) {
+		if (files.length <= 1) return;
+		const idx = files.findIndex(f => f.id === id);
+		const next = files.filter(f => f.id !== id);
+		files = next;
+		if (id === activeFileId) {
+			const target = next[Math.min(idx, next.length - 1)];
+			activeFileId = target.id;
+			editor?.importJson(target.json ?? '', target.viewport);
+			cCode = generateAllCode();
+		}
+	}
+
+	function commitRename(id: string, name: string) {
+		const trimmed = name.trim();
+		if (trimmed) files = files.map(f => f.id === id ? { ...f, name: trimmed } : f);
+		editingFileId = null;
+	}
+
+	// ─── Merge all files' flows for code generation ──────────────────────
+	function mergeAllFlows(): { blocks: CanvasBlock[]; conns: Connection[] } {
+		const currentJson = editor?.exportJson() ?? '';
+		const snapshot = files.map(f => f.id === activeFileId ? { ...f, json: currentJson } : f);
+		const blocks: CanvasBlock[] = [];
+		const conns: Connection[] = [];
+		for (const file of snapshot) {
+			if (!file.json) continue;
+			try {
+				const data = JSON.parse(file.json);
+				const p = file.id + '_';
+				for (const b of (data.canvasBlocks ?? []) as CanvasBlock[])
+					blocks.push({ ...b, id: p + b.id });
+				for (const c of (data.connections ?? []) as Connection[])
+					conns.push({ ...c, id: p + c.id, fromBlockId: p + c.fromBlockId, toBlockId: p + c.toBlockId });
+			} catch { /* skip malformed file */ }
+		}
+		return { blocks, conns };
+	}
+
+	function generateAllCode(): string {
+		if (!editor) return '';
+		const { blocks, conns } = mergeAllFlows();
+		return editor.generateCodeFromData(blocks, conns);
+	}
 
 	// ── Embed / Share ────────────────────────────────────────────────────
 	const _urlParams   = new URLSearchParams(window.location.search);
@@ -157,8 +263,8 @@
 			if (agentSnackbarId === null) {
 				agentSnackbarId = snackbar.show({
 					type: 'error',
-					message: 'เชื่อมต่อกับ FlowCode Agent ไม่ได้ กรุณาดาวน์โหลด/เปิด FlowCode Agent',
-					action: { label: 'ดาวน์โหลด', href: 'https://github.com/ArtronShop/flowcode-agent/releases' },
+					message: 'Cannot connect to FlowCode Agent. Please download/open FlowCode Agent.',
+					action: { label: 'Download', href: 'https://github.com/ArtronShop/flowcode-agent/releases' },
 					hideClose: true,
 				});
 			}
@@ -290,14 +396,20 @@
 			zoom: editor!.getZoom(),
 		};
 
-		if (event === 'zoom' || event === 'block:focus' || event === 'block:blur'
+		if (event === 'zoom') {
+			const viewport = editor!.getViewport();
+			files = files.map(f => f.id === activeFileId ? { ...f, viewport } : f);
+			return;
+		}
+		if (event === 'block:focus' || event === 'block:blur'
 			|| event === 'conn:focus' || event === 'conn:blur' || event === 'block:move') return;
 
-		// Save to Local Storage
+		// Save active file into files array (persisted via $effect)
 		const json = editor!.exportJson();
-		localStorage.setItem('flowcode-project', json);
+		const viewport = editor!.getViewport();
+		files = files.map(f => f.id === activeFileId ? { ...f, json, viewport } : f);
 
-		cCode = editor?.generateCode() || '';
+		cCode = generateAllCode();
 	}
 	
 	let confirmDialogOpen = $state(false);
@@ -305,20 +417,30 @@
 
 	function newProject() {
 		confirmDialogOption = {
-			title: 'สร้างโปรเจคใหม่',
-			message: 'บล็อกและการเชื่อมต่อทั้งหมดจะถูกล้าง ยืนยันหรือไม่?',
-			confirmLabel: 'สร้างใหม่',
-			onconfirm: () => editor?.clear(),
+			title: 'New Project',
+			message: 'All files and blocks will be cleared. Continue?',
+			confirmLabel: 'Create New',
+			onconfirm: () => {
+				const id = `f${Date.now()}`;
+				files = [{ id, name: 'main.flow', json: '' }];
+				activeFileId = id;
+				editor?.clear();
+				cCode = '';
+			},
 		};
 		confirmDialogOpen = true;
 	}
 
 	async function saveProject() {
-		const data = editor?.exportJson() || '';
+		// Save current file state first
+		const currentJson = editor?.exportJson() ?? '';
+		const snapshot = files.map(f => f.id === activeFileId ? { ...f, json: currentJson } : f);
+		const data = JSON.stringify({ v: 2, files: snapshot, activeFileId }, null, 2);
+		const firstName = snapshot[0]?.name ?? 'project';
 		if ('showSaveFilePicker' in window) {
 			try {
 				const handle = await (window as any).showSaveFilePicker({
-					suggestedName: 'project.json',
+					suggestedName: `${firstName}.flowcode.json`,
 					types: [{ description: 'FlowCode Project', accept: { 'application/json': ['.json'] } }]
 				});
 				const writable = await handle.createWritable();
@@ -330,32 +452,54 @@
 		} else {
 			const a = document.createElement('a');
 			a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
-			a.download = 'project.json';
+			a.download = `${firstName}.flowcode.json`;
 			a.click();
 			URL.revokeObjectURL(a.href);
 		}
 	}
 
 	async function openProject() {
-		if ('showOpenFilePicker' in window) {
-			try {
-				const [handle] = await (window as any).showOpenFilePicker({
-					types: [{ description: 'FlowCode Project', accept: { 'application/json': ['.json'] } }]
+		async function _loadText(): Promise<string | null> {
+			if ('showOpenFilePicker' in window) {
+				try {
+					const [handle] = await (window as any).showOpenFilePicker({
+						types: [{ description: 'FlowCode Project', accept: { 'application/json': ['.json'] } }]
+					});
+					return await (await handle.getFile()).text();
+				} catch (e: any) {
+					if (e.name !== 'AbortError') console.error(e);
+					return null;
+				}
+			} else {
+				return new Promise(resolve => {
+					const input = document.createElement('input');
+					input.type = 'file';
+					input.accept = '.json,application/json';
+					input.onchange = async () => resolve(input.files?.[0] ? await input.files[0].text() : null);
+					input.click();
 				});
-				const file = await handle.getFile();
-				editor?.importJson(await file.text());
-			} catch (e: any) {
-				if (e.name !== 'AbortError') console.error(e);
 			}
-		} else {
-			const input = document.createElement('input');
-			input.type = 'file';
-			input.accept = '.json,application/json';
-			input.onchange = async () => {
-				const file = input.files?.[0];
-				if (file) editor?.importJson(await file.text());
-			};
-			input.click();
+		}
+		const text = await _loadText();
+		if (!text) return;
+		try {
+			const data = JSON.parse(text);
+			if (data.v === 2 && Array.isArray(data.files) && data.files.length > 0) {
+				// Multi-file format
+				files = data.files;
+				activeFileId = data.activeFileId ?? data.files[0].id;
+				const target = data.files.find((f: FlowFile) => f.id === activeFileId) ?? data.files[0];
+				editor?.importJson(target.json ?? '', target.viewport);
+			} else {
+				// Legacy single-file format — load as single file named 'main'
+				const id = `f${Date.now()}`;
+				files = [{ id, name: 'main.flow', json: text }];
+				activeFileId = id;
+				editor?.importJson(text);
+			}
+			cCode = generateAllCode();
+		} catch {
+			snackbar.show({ type: 'error', message: 'Failed to load project file' });
 		}
 	}
 
@@ -374,12 +518,12 @@
 		if (missingMap.size > 0) {
 			const lines = [...missingMap.entries()].map(([reqId, users]) => {
 				const reqName = editor?.getBlockName(reqId) ?? reqId;
-				return `  • ${reqName}  (ต้องการโดย: ${users.join(', ')})`;
+				return `  • ${reqName}  (required by: ${users.join(', ')})`;
 			});
 			confirmDialogOption = {
-				title: '⚠️ บล็อกที่จำเป็นหายไป',
-				message: `กรุณาเพิ่มบล็อกต่อไปนี้ในพื้นที่ทำงานก่อน:\n${lines.join('\n')}`,
-				confirmLabel: 'ตกลง',
+				title: '⚠️ Missing Required Blocks',
+				message: `Please add the following blocks to the canvas:\n${lines.join('\n')}`,
+				confirmLabel: 'OK',
 				hideCancel: true,
 			};
 			confirmDialogOpen = true;
@@ -396,7 +540,7 @@
 		const log = (msg: string) => { runLogs = [...runLogs, msg + '\n']; };
 
 		const sketchName = 'flowcode_project';
-		const code = editor?.generateCode() || '';
+		const code = generateAllCode();
 		const board = selectedBoard;
 		const installedDeps = extensions
 			.filter((e) => e.installed && Array.isArray(e.depends))
@@ -408,39 +552,39 @@
 			// 1. Install core (ครั้งแรกเท่านั้น)
 			const coreKey = `${board.platform.id}@${board.platform.version}`;
 			if (!installedCores.has(coreKey)) {
-				log(`📦 ติดตั้ง core: ${coreKey}`);
+				log(`📦 Installing core: ${coreKey}`);
 				await agent.installCore(board.platform.id, board.platform.version, board.platform.package);
 				installedCores.add(coreKey);
-				log('✅ ติดตั้ง core สำเร็จ');
+				log('✅ Core installed');
 			} else {
-				log(`⏭ ข้าม core (ติดตั้งแล้ว): ${coreKey}`);
+				log(`⏭ Skipping core (already installed): ${coreKey}`);
 			}
 
 			// 2. Install libraries (ติดตั้งเฉพาะที่ยังไม่เคยติดตั้ง)
 			const allDeps = [...(board.depends ?? []), ...installedDeps];
 			const newDeps = allDeps.filter((d) => !installedLibs.has(d));
 			if (newDeps.length > 0) {
-				log(`📚 ติดตั้ง library: ${newDeps.join(', ')}`);
+				log(`📚 Installing libraries: ${newDeps.join(', ')}`);
 				await agent.installLibrary(newDeps);
 				newDeps.forEach((d) => installedLibs.add(d));
-				log('✅ ติดตั้ง library สำเร็จ');
+				log('✅ Libraries installed');
 			} else if (allDeps.length > 0) {
-				log(`⏭ ข้าม library (ติดตั้งแล้วทั้งหมด)`);
+				log('⏭ Skipping libraries (all installed)');
 			}
 
 			// 3 & 4. Write + Compile (ข้ามถ้าโค้ดและ fqbn เหมือนเดิม)
 			const fqbn = activeFqbn;
 			const currentHash = await hashCode(code);
 			if (currentHash === lastCompiledHash && fqbn === lastCompiledFqbn) {
-				log(`⏭ ข้าม write & compile (โค้ดเหมือนรอบที่แล้ว)`);
+				log('⏭ Skipping write & compile (code unchanged)');
 			} else {
-				log(`📝 เขียน sketch: ${sketchName}`);
+				log(`📝 Writing sketch: ${sketchName}`);
 				await agent.writeSketch(sketchName, code);
-				log('✅ เขียน sketch สำเร็จ');
+				log('✅ Sketch written');
 
-				log(`🔨 กำลัง compile (${fqbn})...`);
+				log(`🔨 Compiling (${fqbn})...`);
 				await agent.compile(sketchName, fqbn);
-				log('✅ Compile สำเร็จ');
+				log('✅ Compiled successfully');
 
 				lastCompiledHash = currentHash;
 				lastCompiledFqbn = fqbn;
@@ -454,19 +598,19 @@
 			}
 
 			// 5. Upload
-			if (!selectedPort) throw new Error('กรุณาเลือก Port ก่อน Upload');
-			log(`🚀 กำลัง upload ไปที่ ${selectedPort}...`);
+			if (!selectedPort) throw new Error('Please select a port before uploading');
+			log(`🚀 Uploading to ${selectedPort}...`);
 			await agent.upload(sketchName, fqbn, selectedPort);
-			log('✅ Upload สำเร็จ');
+			log('✅ Upload complete');
 
 			if (serialConnectAfterUpload) {
 				setTimeout(toggleSerialConnect, 500); // wait port are ready again before connect
 			}
 
-			snackbar.show({ type: 'success', message: 'Run เสร็จสิ้น', autoClose: 5000 });
+			snackbar.show({ type: 'success', message: 'Done', autoClose: 5000 });
 		} catch (e: any) {
-			log(`❌ เกิดข้อผิดพลาด: ${e?.message ?? String(e)}`);
-			runErrorSnackbarId = snackbar.show({ type: 'error', message: `Run ผิดพลาด: ${e?.message ?? String(e)}` });
+			log(`❌ Error: ${e?.message ?? String(e)}`);
+			runErrorSnackbarId = snackbar.show({ type: 'error', message: `Run failed: ${e?.message ?? String(e)}` });
 		} finally {
 			isRunning = false;
 		}
@@ -534,7 +678,7 @@
 				if (data.flow) editor?.importJson(data.flow);
 			} catch (e) {
 				console.error('Failed to load from ?open param', e);
-				snackbar.show({ type: 'error', message: 'โหลด workflow จาก URL ไม่สำเร็จ' });
+				snackbar.show({ type: 'error', message: 'Failed to load workflow from URL' });
 			}
 		} else {
 			// ── Load board select from local storage ───────────────────
@@ -551,9 +695,9 @@
 				extensions = extensions.map((e) => ({ ...e, installed: ids.has(e.id) }));
 			}
 
-			// Load flow from local storage
-			const saved = localStorage.getItem('flowcode-project');
-			if (saved) editor?.importJson(saved);
+			// Load active file into editor (restore saved viewport if available)
+			const target = files.find(f => f.id === activeFileId) ?? files[0];
+			if (target?.json) editor?.importJson(target.json, target.viewport);
 		}
 
 		const savedTab = localStorage.getItem('console-tab');
@@ -701,7 +845,7 @@
 						value={selectedBoard.id}
 						options={boards.map((b) => ({ value: b.id, label: b.name }))}
 						onchange={(v) => changeBoard(v)}
-						placeholder="เลือกบอร์ด"
+						placeholder="Select board"
 						style="font-size:12px; padding: 3px 8px;"
 					/>
 				</div>
@@ -788,7 +932,7 @@
 			<div class="mx-1 h-5 w-px bg-gray-700"></div>
 			<button
 				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
-				title="แชร์"
+				title="Share"
 				onclick={() => openShareDialog()}
 			>
 				<Share2 size={16} />
@@ -801,7 +945,7 @@
 				target="_blank"
 				rel="noopener noreferrer"
 				class="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
-				title="เปิดในหน้าต่างใหม่"
+				title="Open in new window"
 				onclick={async (e) => {
 					if (!shareUrl) {
 						e.preventDefault();
@@ -810,7 +954,7 @@
 				}}
 			>
 				<ExternalLink size={16} />
-				<span>เปิดในหน้าต่างใหม่</span>
+				<span>Open in new window</span>
 			</a>
 			{/if}
 		</div>
@@ -821,7 +965,7 @@
 			<button
 				onclick={(e) => { e.stopPropagation(); showUserMenu = !showUserMenu; }}
 				class="h-8 w-8 overflow-hidden rounded-full ring-2 ring-transparent transition-all hover:ring-blue-500 focus:outline-none focus:ring-blue-500"
-				aria-label="เมนูผู้ใช้"
+				aria-label="User menu"
 			>
 				<div class="flex h-full w-full items-center justify-center bg-linear-to-br from-blue-500 to-purple-600 text-sm font-bold">
 					S
@@ -844,17 +988,17 @@
 					<div class="py-1">
 						<button class="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-gray-300 transition-colors hover:bg-gray-700 hover:text-white">
 							<User size={16} class="text-gray-400" />
-							ข้อมูลส่วนตัว
+							Profile
 						</button>
 						<button class="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-gray-300 transition-colors hover:bg-gray-700 hover:text-white">
 							<Folder size={16} class="text-gray-400" />
-							โปรเจคของฉัน
+							My Projects
 						</button>
 					</div>
 					<div class="border-t border-gray-700 py-1">
 						<button class="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-gray-700/50 hover:text-red-300">
 							<LogOut size={16} />
-							ออกจากระบบ
+							Sign out
 						</button>
 					</div>
 				</div>
@@ -872,14 +1016,14 @@
 			<button
 				onclick={() => togglePanel('files')}
 				class="flex h-9 w-9 items-center justify-center rounded-lg transition-colors {activePanel === 'files' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-700 hover:text-white'}"
-				title="จัดการไฟล์"
+				title="Files"
 			>
 				<Files size={18} />
 			</button>
 			<button
 				onclick={() => togglePanel('extensions')}
 				class="flex h-9 w-9 items-center justify-center rounded-lg transition-colors {activePanel === 'extensions' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-700 hover:text-white'}"
-				title="ติดตั้งบล็อกเสริม"
+				title="Extensions"
 			>
 				<Puzzle size={18} />
 			</button>
@@ -887,7 +1031,7 @@
 			<button
 				onclick={() => { togglePanel('help'); helpBlockDef = null; }}
 				class="flex h-9 w-9 items-center justify-center rounded-lg transition-colors {activePanel === 'help' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-700 hover:text-white'}"
-				title="วิธีใช้"
+				title="Help"
 			>
 				<CircleQuestionMark size={18} />
 			</button>
@@ -895,7 +1039,7 @@
 				href="https://docs.google.com/forms/d/e/1FAIpQLSfu1sHKHX_ruOAXCKWQR37l-YmX-y-oQ-2iNadISVHftOnseQ/viewform?usp=publish-editor"
 				target="_blank"
 				class="flex h-9 w-9 items-center justify-center rounded-lg transition-colors text-gray-500 hover:bg-gray-700 hover:text-white"
-				title="รายงานปัญหา"
+				title="Report issue"
 			>
 				<MessageCircle size={18} />
 			</a>
@@ -914,18 +1058,18 @@
 				<div class="flex items-center justify-between border-b border-gray-700/60 px-4 py-3">
 					<div class="flex gap-2">
 						{#if activePanel === 'help' && helpBlockDef}
-							<button onclick={() => helpBlockDef = null} aria-label="กลับ" class="text-gray-600 hover:text-gray-300 transition-colors">
+							<button onclick={() => helpBlockDef = null} aria-label="Back" class="text-gray-600 hover:text-gray-300 transition-colors">
 								<ArrowLeft size={16} />
 							</button>
 						{/if}
 						<span class="text-xs font-semibold uppercase tracking-widest text-gray-400">
-							{#if activePanel === 'files'}จัดการไฟล์
-							{:else if activePanel === 'extensions'}บล็อกเสริม
-							{:else if activePanel === 'help'}วิธีใช้
+							{#if activePanel === 'files'}Files
+							{:else if activePanel === 'extensions'}Extensions
+							{:else if activePanel === 'help'}Help
 							{/if}
 						</span>
 					</div>
-					<button onclick={() => activePanel = null} aria-label="ปิด" class="text-gray-600 hover:text-gray-300 transition-colors">
+					<button onclick={() => activePanel = null} aria-label="Close" class="text-gray-600 hover:text-gray-300 transition-colors">
 						<X size={16} />
 					</button>
 				</div>
@@ -933,30 +1077,76 @@
 				<!-- Panel content -->
 				<div class="flex-1 overflow-y-auto p-3">
 					{#if activePanel === 'files'}
-						<div class="space-y-1">
-							<button onclick={newProject} class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-gray-300 transition-colors hover:bg-gray-700 hover:text-white">
-								<FilePlus size={15} class="shrink-0 text-gray-500" />สร้างโปรเจคใหม่
-							</button>
-							<button onclick={openProject} class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-gray-300 transition-colors hover:bg-gray-700 hover:text-white">
-								<FolderOpen size={15} class="shrink-0 text-gray-500" />เปิดโปรเจค
-							</button>
-							<button onclick={saveProject} class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-gray-300 transition-colors hover:bg-gray-700 hover:text-white">
-								<Save size={15} class="shrink-0 text-gray-500" />บันทึกโปรเจค
-							</button>
-							<button onclick={runProject} class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-gray-300 transition-colors hover:bg-gray-700 hover:text-white">
-								<CirclePlay size={15} class="shrink-0 text-gray-500" />ส่งออก .ino
-							</button>
+						<div class="space-y-3">
+							<!-- File tabs -->
+							<div>
+								<div class="mb-1.5 flex items-center justify-between">
+									<span class="text-[10px] font-semibold uppercase tracking-widest text-gray-600">Files</span>
+									<button
+										onclick={addFile}
+										class="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+										title="New file"
+									>
+										<FilePlus size={12} />Add
+									</button>
+								</div>
+								<div class="space-y-0.5">
+									{#each files as file (file.id)}
+										<!-- svelte-ignore a11y_no_static_element_interactions -->
+										<div
+											class="group flex items-center gap-1.5 rounded-lg px-2 py-1.5 transition-colors {file.id === activeFileId ? 'bg-blue-600/20 text-blue-300' : 'text-gray-400 hover:bg-gray-700 hover:text-white'}"
+											onclick={() => switchFile(file.id)}
+											onkeydown={(e) => e.key === 'Enter' && switchFile(file.id)}
+											role="button"
+											tabindex="0"
+										>
+											<svg class="h-3.5 w-3.5 shrink-0 {file.id === activeFileId ? 'text-blue-400' : 'text-gray-600'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+											</svg>
+											{#if editingFileId === file.id}
+												<!-- svelte-ignore a11y_autofocus -->
+												<input
+													class="min-w-0 flex-1 rounded border border-blue-500 bg-gray-800 px-1 py-0 text-[11px] text-white outline-none"
+													value={file.name}
+													autofocus
+													onclick={(e) => e.stopPropagation()}
+													onkeydown={(e) => {
+														e.stopPropagation();
+														if (e.key === 'Enter') commitRename(file.id, (e.currentTarget as HTMLInputElement).value);
+														if (e.key === 'Escape') editingFileId = null;
+													}}
+													onblur={(e) => commitRename(file.id, (e.currentTarget as HTMLInputElement).value)}
+												/>
+											{:else}
+												<span
+													class="min-w-0 flex-1 truncate text-[11px]"
+													ondblclick={(e) => { e.stopPropagation(); editingFileId = file.id; }}
+												>{file.name}</span>
+											{/if}
+											{#if files.length > 1}
+												<button
+													class="ml-auto shrink-0 rounded p-0.5 text-gray-600 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-900/40 hover:text-red-400"
+													onclick={(e) => { e.stopPropagation(); deleteFile(file.id); }}
+													title="Delete file"
+												>
+													<X size={11} />
+												</button>
+											{/if}
+										</div>
+									{/each}
+								</div>
+							</div>
 						</div>
 					{:else if activePanel === 'extensions'}
 						<div class="space-y-2">
 							<input
 								bind:value={extensionSearch}
 								type="text"
-								placeholder="ค้นหา Extension…"
+								placeholder="Search extensions…"
 								class="mb-3 w-full rounded-md border border-gray-700 bg-gray-800 px-2.5 py-1.5 text-xs text-gray-200 placeholder-gray-500 outline-none focus:border-blue-500"
 							/>
 							{#if filteredExtensions().filter(a => a.installed).length > 0}
-							<p class="mb-1 text-[11px] text-gray-500">ติดตั้งแล้ว</p>
+							<p class="mb-1 text-[11px] text-gray-500">Installed</p>
 							{/if}
 							{#each filteredExtensions().filter(a => a.installed) as ext}
 								<div class="rounded-lg border border-gray-700/60 bg-gray-800/40 px-3 py-2.5 text-xs">
@@ -969,7 +1159,7 @@
 													<CircleCheck size={11} class="ml-auto shrink-0 text-green-500" />
 												{/if}
 											</div>
-											<p class="mt-0.5 text-[10px] text-gray-500">โดย {ext.author}</p>
+											<p class="mt-0.5 text-[10px] text-gray-500">by {ext.author}</p>
 											<p class="mt-1 leading-snug text-gray-400">{ext.description}</p>
 										</div>
 									</div>
@@ -979,14 +1169,14 @@
 												onclick={() => ext.installed = false}
 												class="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-red-400 transition-colors hover:bg-red-900/30 hover:text-red-300"
 											>
-												<Trash2 size={11} />ถอนติดตั้ง
+												<Trash2 size={11} />Uninstall
 											</button>
 										{:else}
 											<button
 												onclick={() => installExtension(ext)}
 												class="flex items-center gap-1 rounded bg-blue-600/20 px-2 py-1 text-[10px] text-blue-400 transition-colors hover:bg-blue-600/40 hover:text-blue-300"
 											>
-												<Download size={11} />ติดตั้ง
+												<Download size={11} />Install
 											</button>
 										{/if}
 									</div>
@@ -994,7 +1184,7 @@
 							{/each}
 							{#if filteredExtensions().filter(a => !a.installed).length > 0}
 							<!-- <hr class="border-gray-700/60 mb-3" /> -->
-							<p class="mt-3 mb-1 text-[11px] text-gray-500">ยังไม่ติดตั้ง</p>
+							<p class="mt-3 mb-1 text-[11px] text-gray-500">Not installed</p>
 							{/if}
 							{#each filteredExtensions().filter(a => !a.installed) as ext}
 								<div class="rounded-lg border border-gray-700/60 bg-gray-800/40 px-3 py-2.5 text-xs">
@@ -1007,7 +1197,7 @@
 													<CircleCheck size={11} class="ml-auto shrink-0 text-green-500" />
 												{/if}
 											</div>
-											<p class="mt-0.5 text-[10px] text-gray-500">โดย {ext.author}</p>
+											<p class="mt-0.5 text-[10px] text-gray-500">by {ext.author}</p>
 											<p class="mt-1 leading-snug text-gray-400">{ext.description}</p>
 										</div>
 									</div>
@@ -1017,21 +1207,21 @@
 												onclick={() => ext.installed = false}
 												class="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-red-400 transition-colors hover:bg-red-900/30 hover:text-red-300"
 											>
-												<Trash2 size={11} />ถอนติดตั้ง
+												<Trash2 size={11} />Uninstall
 											</button>
 										{:else}
 											<button
 												onclick={() => installExtension(ext)}
 												class="flex items-center gap-1 rounded bg-blue-600/20 px-2 py-1 text-[10px] text-blue-400 transition-colors hover:bg-blue-600/40 hover:text-blue-300"
 											>
-												<Download size={11} />ติดตั้ง
+												<Download size={11} />Install
 											</button>
 										{/if}
 									</div>
 								</div>
 							{/each}
 							{#if filteredExtensions().length === 0}
-								<p class="py-4 text-center text-[11px] text-gray-500">ไม่พบ Extension ที่ตรงกับ "{extensionSearch}"</p>
+								<p class="py-4 text-center text-[11px] text-gray-500">No extensions found for "{extensionSearch}"</p>
 							{/if}
 						</div>
 					{:else if activePanel === 'help'}
@@ -1110,32 +1300,32 @@
 							<!-- ── Home view: guide + block list ──────── -->
 							<div class="space-y-4 text-xs text-gray-400">
 								<div>
-									<p class="mb-1.5 font-semibold text-gray-300">การใช้งานพื้นฐาน</p>
+									<p class="mb-1.5 font-semibold text-gray-300">Basic Usage</p>
 									<ul class="space-y-1 leading-relaxed">
-										<li>• ลากบล็อกจากแผง <span class="text-white">Blocks</span> มาวางบน Canvas</li>
-										<li>• คลิกพอร์ต Output ลากไปพอร์ต Input เพื่อเชื่อมต่อ</li>
-										<li>• คลิกบล็อกเพื่อเลือก กด <kbd class="rounded bg-gray-700 px-1 font-mono">Del</kbd> เพื่อลบ</li>
-										<li>• <kbd class="rounded bg-gray-700 px-1 font-mono">Shift</kbd> + คลิก เพื่อเลือกบล็อก/เส้นหลายชิ้น</li>
-										<li>• คลิกขวาที่บล็อก → วิธีใช้ เพื่อดูรายละเอียด</li>
-										<li>• เลื่อนล้อเมาส์เพื่อซูม ลากพื้นที่ว่างเพื่อเลื่อน Canvas</li>
+										<li>• Drag blocks from the <span class="text-white">Blocks</span> panel onto the canvas</li>
+										<li>• Click an Output port, then an Input port to connect</li>
+										<li>• Click a block to select it, press <kbd class="rounded bg-gray-700 px-1 font-mono">Del</kbd> to delete</li>
+										<li>• <kbd class="rounded bg-gray-700 px-1 font-mono">Shift</kbd> + click to multi-select blocks/connections</li>
+										<li>• Right-click a block → Help to view details</li>
+										<li>• Scroll to zoom, drag empty space to pan the canvas</li>
 									</ul>
 								</div>
 
 								<hr class="border-gray-700/60" />
 
 								<div>
-									<p class="mb-1.5 font-semibold text-gray-300">คีย์ลัด</p>
+									<p class="mb-1.5 font-semibold text-gray-300">Keyboard Shortcuts</p>
 									<ul class="space-y-1.5 leading-relaxed text-xs">
 										<li class="flex items-center justify-between gap-2">
-											<span>เปิดโปรเจค</span>
+											<span>Open project</span>
 											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">O</kbd></span>
 										</li>
 										<li class="flex items-center justify-between gap-2">
-											<span>สร้างโปรเจคใหม่</span>
+											<span>New project</span>
 											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">N</kbd></span>
 										</li>
 										<li class="flex items-center justify-between gap-2">
-											<span>บันทึกโปรเจค</span>
+											<span>Save project</span>
 											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">S</kbd></span>
 										</li>
 										<li class="flex items-center justify-between gap-2">
@@ -1147,27 +1337,27 @@
 											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">M</kbd></span>
 										</li>
 										<li class="flex items-center justify-between gap-2">
-											<span>เปิด/ปิด Help</span>
+											<span>Toggle Help</span>
 											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">H</kbd></span>
 										</li>
 										<li class="flex items-center justify-between gap-2">
-											<span>เปิด/ปิด Extensions</span>
+											<span>Toggle Extensions</span>
 											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">E</kbd></span>
 										</li>
 										<li class="flex items-center justify-between gap-2">
-											<span>เลือกทั้งหมด</span>
+											<span>Select all</span>
 											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">A</kbd></span>
 										</li>
 										<li class="flex items-center justify-between gap-2">
-											<span>เลือกหลายชิ้น</span>
+											<span>Multi-select</span>
 											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Shift</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">Click</kbd></span>
 										</li>
 										<li class="flex items-center justify-between gap-2">
-											<span>ลบที่เลือก</span>
+											<span>Delete selected</span>
 											<kbd class="rounded bg-gray-700 px-1 font-mono">Del</kbd>
 										</li>
 										<li class="flex items-center justify-between gap-2">
-											<span>ยกเลิกการเลือก</span>
+											<span>Deselect</span>
 											<kbd class="rounded bg-gray-700 px-1 font-mono">Esc</kbd>
 										</li>
 									</ul>
@@ -1176,7 +1366,7 @@
 								<hr class="border-gray-700/60" />
 
 								<div>
-									<p class="mb-2 font-semibold text-gray-300">บล็อกทั้งหมด</p>
+									<p class="mb-2 font-semibold text-gray-300">All Blocks</p>
 									<div class="space-y-3">
 										{#each boardCategories as cat}
 											<div>
@@ -1298,7 +1488,7 @@
 						{/if}
 						<button
 							onclick={() => activeConsoleTab = null}
-							aria-label="ปิด"
+							aria-label="Close"
 							class="px-2 py-1.5 text-gray-600 transition-colors hover:text-gray-300"
 						>
 							<X size={14} />
@@ -1312,7 +1502,7 @@
 						{#if runLogs.length === 0}
 							<div class="flex flex-1 items-center justify-center gap-2 text-[11px] text-gray-600">
 								<CirclePlay size={14} />
-								<span>กด <span class="text-gray-400">รัน</span> เพื่อเริ่มการ compile และ upload</span>
+								<span>Press <span class="text-gray-400">Run</span> to compile and upload</span>
 							</div>
 						{:else}
 							<pre bind:this={runLogEl} class="min-h-0 flex-1 overflow-auto p-3 font-mono text-[11px] leading-5 text-gray-300">{@html ansiToHtml(runLogs.join(''))}</pre>
@@ -1400,7 +1590,7 @@
 		<button
 			onclick={() => activeConsoleTab = activeConsoleTab !== null ? null : 'code'}
 			class="flex items-center gap-1 transition-colors {activeConsoleTab !== null ? 'text-blue-400 hover:text-blue-300' : 'text-gray-600 hover:text-gray-400'}"
-			title="แสดง/ซ่อน Console"
+			title="Toggle Console"
 		>
 			<SquareCode size={12} />
 			<span>Console</span>
