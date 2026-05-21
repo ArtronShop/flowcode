@@ -361,8 +361,8 @@
 				name: src.name,
 				color: src.color,
 				icon: src.icon,
-				x: snap(Math.max(0, cc.x - BLOCK_WIDTH / 2)),
-				y: snap(Math.max(0, cc.y - BLOCK_HEADER / 2)),
+				x: snap(cc.x),
+				y: snap(cc.y),
 				inputs:  (dynPorts?.inputs  ?? src.inputs).map((p) => ({ ...p })),
 				outputs: (dynPorts?.outputs ?? src.outputs).map((p) => ({ ...p })),
 				params: defaultParams,
@@ -1459,7 +1459,7 @@
 		{#if draggingFromPalette && paletteGhost}
 			<div
 				class="pointer-events-none fixed z-50 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold text-gray-200 opacity-80 shadow-xl"
-				style="left:{paletteGhost.x + 12}px; top:{paletteGhost.y + 8}px; border-color:{draggingFromPalette.color}55; background:linear-gradient(160deg,#1e293b,#0f172a);"
+				style="left:{paletteGhost.x + 4}px; top:{paletteGhost.y + 4}px; border-color:{draggingFromPalette.color}55; background:linear-gradient(160deg,#1e293b,#0f172a);"
 			>
 				<span>{draggingFromPalette.icon}</span>
 				<span>{draggingFromPalette.name}</span>
