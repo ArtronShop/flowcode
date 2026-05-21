@@ -254,7 +254,7 @@
 	});
 
 	agent.onConnect = () => { agentConnected = true; };
-	agent.onDisconnect = () => { agentConnected = false; };
+	agent.onDisconnect = () => { agentConnected = false; serialConnected = false; };
 
 	// ── Persistent snackbar เมื่อเชื่อมต่อ Agent ไม่ได้ ──────────────
 	let agentSnackbarId = $state<number | null>(null);
@@ -593,7 +593,7 @@
 			// Disconnect Serial Port before upload
 			let serialConnectAfterUpload = false;
 			if (serialConnected) {
-				toggleSerialConnect(); // call it for disconnect
+				await toggleSerialConnect();
 				serialConnectAfterUpload = true;
 			}
 

@@ -7,6 +7,7 @@ export class FlowcodeAgentClient {
     private callbacks: Map<string, { resolve: (val: any) => void; reject: (err: Error) => void }> = new Map();
     private shouldReconnect = false;
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    private connecting = false;
 
     // Callbacks สำหรับเหตุการณ์ต่างๆ
     public onStream?: (payload: StreamPayload) => void;
@@ -33,20 +34,43 @@ export class FlowcodeAgentClient {
         this.ws?.close();
     }
 
+    private _detach(ws: WebSocket): void {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.onclose = null;
+    }
+
     private _connect(): void {
+        // Prevent concurrent connection attempts
+        if (this.connecting) return;
+
         if (this.reconnectTimer !== null) {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
         }
 
+        // Detach old socket's handlers before replacing it.
+        // Without this, the old socket's onclose fires after TCP timeout and
+        // triggers _scheduleReconnect() again — spawning duplicate connections.
+        if (this.ws) {
+            this._detach(this.ws);
+            this.ws.close();
+            this.ws = null;
+        }
+
+        this.connecting = true;
+
         try {
             this.ws = new WebSocket(this.url);
         } catch {
+            this.connecting = false;
             this._scheduleReconnect();
             return;
         }
 
         this.ws.onopen = () => {
+            this.connecting = false;
             this.onConnect?.();
         };
 
@@ -84,12 +108,12 @@ export class FlowcodeAgentClient {
         };
 
         this.ws.onerror = () => {
-            // onclose จะถูกเรียกต่อจาก onerror อัตโนมัติ
+            // onclose fires automatically after onerror
         };
 
         this.ws.onclose = () => {
+            this.connecting = false;
             this.onDisconnect?.();
-            // Reject pending callbacks
             for (const [, cb] of this.callbacks) {
                 cb.reject(new Error("WebSocket disconnected"));
             }
