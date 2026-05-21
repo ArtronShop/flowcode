@@ -1305,7 +1305,8 @@
 										<li>• Drag blocks from the <span class="text-white">Blocks</span> panel onto the canvas</li>
 										<li>• Click an Output port, then an Input port to connect</li>
 										<li>• Click a block to select it, press <kbd class="rounded bg-gray-700 px-1 font-mono">Del</kbd> to delete</li>
-										<li>• <kbd class="rounded bg-gray-700 px-1 font-mono">Shift</kbd> + click to multi-select blocks/connections</li>
+										<li>• <kbd class="rounded bg-gray-700 px-1 font-mono">Shift</kbd> + click to add to selection</li>
+										<li>• <kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd> + drag on empty space to box-select</li>
 										<li>• Right-click a block → Help to view details</li>
 										<li>• Scroll to zoom, drag empty space to pan the canvas</li>
 									</ul>
@@ -1315,6 +1316,8 @@
 
 								<div>
 									<p class="mb-1.5 font-semibold text-gray-300">Keyboard Shortcuts</p>
+
+									<p class="mb-1 mt-2 text-[10px] font-semibold uppercase tracking-widest text-gray-600">Project</p>
 									<ul class="space-y-1.5 leading-relaxed text-xs">
 										<li class="flex items-center justify-between gap-2">
 											<span>Open project</span>
@@ -1329,7 +1332,7 @@
 											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">S</kbd></span>
 										</li>
 										<li class="flex items-center justify-between gap-2">
-											<span>Run</span>
+											<span>Run &amp; upload</span>
 											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">R</kbd></span>
 										</li>
 										<li class="flex items-center justify-between gap-2">
@@ -1344,21 +1347,57 @@
 											<span>Toggle Extensions</span>
 											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">E</kbd></span>
 										</li>
+									</ul>
+
+									<p class="mb-1 mt-3 text-[10px] font-semibold uppercase tracking-widest text-gray-600">Selection</p>
+									<ul class="space-y-1.5 leading-relaxed text-xs">
 										<li class="flex items-center justify-between gap-2">
 											<span>Select all</span>
 											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">A</kbd></span>
 										</li>
 										<li class="flex items-center justify-between gap-2">
-											<span>Multi-select</span>
+											<span>Box select (drag)</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">Drag</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>Add to selection</span>
 											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Shift</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">Click</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>Deselect</span>
+											<kbd class="rounded bg-gray-700 px-1 font-mono">Esc</kbd>
+										</li>
+									</ul>
+
+									<p class="mb-1 mt-3 text-[10px] font-semibold uppercase tracking-widest text-gray-600">Edit</p>
+									<ul class="space-y-1.5 leading-relaxed text-xs">
+										<li class="flex items-center justify-between gap-2">
+											<span>Copy</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">C</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>Cut (move across files)</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">X</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>Paste</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">V</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>Duplicate</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">D</kbd></span>
 										</li>
 										<li class="flex items-center justify-between gap-2">
 											<span>Delete selected</span>
 											<kbd class="rounded bg-gray-700 px-1 font-mono">Del</kbd>
 										</li>
 										<li class="flex items-center justify-between gap-2">
-											<span>Deselect</span>
-											<kbd class="rounded bg-gray-700 px-1 font-mono">Esc</kbd>
+											<span>Undo</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">Z</kbd></span>
+										</li>
+										<li class="flex items-center justify-between gap-2">
+											<span>Redo</span>
+											<span class="flex gap-1"><kbd class="rounded bg-gray-700 px-1 font-mono">Ctrl</kbd><kbd class="rounded bg-gray-700 px-1 font-mono">Y</kbd></span>
 										</li>
 									</ul>
 								</div>
