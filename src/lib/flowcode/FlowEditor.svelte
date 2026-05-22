@@ -271,6 +271,7 @@
 	let panStart = { x: 0, y: 0 };
 	let didPan = false; // true เมื่อขยับเมาส์ขณะ pan (ไม่ใช่แค่คลิก)
 	let didRubberBand = false; // true หลัง rubber band selection เสร็จ เพื่อกัน click ล้าง selection
+	let didPaletteDrop = false; // true หลังวางบล็อกจาก palette เพื่อกัน click ล้าง selection
 
 	let canvas: HTMLElement;
 
@@ -345,28 +346,21 @@
 		paletteGhost = { x: e.clientX, y: e.clientY };
 	}
 
-	function dropPaletteBlock(clientX: number, clientY: number) {
-		if (!draggingFromPalette) return;
-		const rect = canvas.getBoundingClientRect();
-		if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
-			draggingFromPalette = null;
-			paletteGhost = null;
-			return;
-		}
-		const cc = toCanvasCoords(clientX, clientY);
-		const src = draggingFromPalette;
+	function _spawnPaletteBlock(cc: { x: number; y: number }): string {
+		const src = draggingFromPalette!;
 		const defaultParams = Object.fromEntries((src.params ?? []).map((p) => [p.id, paramDefault(p)]));
 		const dynPorts = src.dynamicPorts?.({ ...defaultParams, __funcRegistry: JSON.stringify(computeFuncRegistry()) });
+		const newId = `block-${nextId++}`;
 		canvasBlocks = [
 			...canvasBlocks,
 			{
-				id: `block-${nextId++}`,
+				id: newId,
 				typeId: src.id,
 				trigger: src?.trigger || false,
 				name: src.name,
 				color: src.color,
 				icon: src.icon,
-				x: snap(cc.x),
+				x: snap(cc.x - BLOCK_WIDTH / 2),
 				y: snap(cc.y),
 				inputs:  (dynPorts?.inputs  ?? src.inputs).map((p) => ({ ...p })),
 				outputs: (dynPorts?.outputs ?? src.outputs).map((p) => ({ ...p })),
@@ -376,6 +370,21 @@
 		];
 		draggingFromPalette = null;
 		paletteGhost = null;
+		selectedBlockId = newId;
+		selectedBlockIds = new Set();
+		didPaletteDrop = true;
+		return newId;
+	}
+
+	function dropPaletteBlock(clientX: number, clientY: number) {
+		if (!draggingFromPalette) return;
+		const rect = canvas.getBoundingClientRect();
+		if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+			draggingFromPalette = null;
+			paletteGhost = null;
+			return;
+		}
+		_spawnPaletteBlock(toCanvasCoords(clientX, clientY));
 		onchange?.('block:add');
 	}
 
@@ -451,10 +460,32 @@
 	// ─── Window-level pointer events (palette ghost + block drag) ────
 	function handleWindowMouseMove(e: PointerEvent) {
 		if (paletteGhost) paletteGhost = { x: e.clientX, y: e.clientY };
+
+		// Mid-drag transition: when cursor enters canvas while holding a palette block,
+		// spawn the block and transfer pointer capture to the canvas so the user can
+		// keep holding and drag it to the final position without releasing.
+		if (draggingFromPalette && !draggingBlock && canvas) {
+			const rect = canvas.getBoundingClientRect();
+			if (e.clientX > rect.left && e.clientX < rect.right &&
+				e.clientY > rect.top  && e.clientY < rect.bottom) {
+				const cc = toCanvasCoords(e.clientX, e.clientY);
+				const newId = _spawnPaletteBlock(cc);
+				// offsetX = BLOCK_WIDTH/2 keeps cursor at horizontal center during drag
+				draggingBlock = { id: newId, offsetX: BLOCK_WIDTH / 2, offsetY: 30 };
+				canvas.setPointerCapture(e.pointerId);
+				onchange?.('block:add');
+			}
+		}
 	}
 
 	function handleWindowMouseUp(e: PointerEvent) {
 		if (draggingFromPalette) dropPaletteBlock(e.clientX, e.clientY);
+		// Fallback: end block drag if canvas pointerup didn't fire (e.g. pointer left canvas)
+		if (draggingBlock) {
+			saveHistory();
+			draggingBlock = null;
+			multiDragOffsets = null;
+		}
 	}
 
 	// ─── Canvas mouse events ─────────────────────────────────────────
@@ -632,6 +663,7 @@
 	function handleCanvasClick() {
 		if (didPan) { didPan = false; return; }
 		if (didRubberBand) { didRubberBand = false; return; }
+		if (didPaletteDrop) { didPaletteDrop = false; return; }
 		connectingFrom = null;
 		const hadBlock = selectedBlockId !== null || selectedBlockIds.size > 0;
 		const hadConn = selectedConnId !== null || selectedConnIds.size > 0;
