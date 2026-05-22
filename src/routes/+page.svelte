@@ -85,8 +85,21 @@
 		localStorage.setItem('flowcode-project-v2', JSON.stringify({ files, activeFileId }));
 	});
 
+	function flushSave() {
+		if (saveTimer) {
+			clearTimeout(saveTimer);
+			saveTimer = null;
+			if (editor) {
+				const json = editor.exportJson();
+				const viewport = editor.getViewport();
+				files = files.map(f => f.id === activeFileId ? { ...f, json, viewport } : f);
+			}
+		}
+	}
+
 	function switchFile(id: string) {
 		if (id === activeFileId) return;
+		flushSave();
 		if (editor) {
 			const json = editor.exportJson();
 			const viewport = editor.getViewport();
@@ -399,6 +412,18 @@
 		activePanel = 'help';
 	}
 
+	let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function scheduleSave() {
+		if (saveTimer) clearTimeout(saveTimer);
+		saveTimer = setTimeout(() => {
+			saveTimer = null;
+			const json = editor!.exportJson();
+			const viewport = editor!.getViewport();
+			files = files.map(f => f.id === activeFileId ? { ...f, json, viewport } : f);
+		}, 2000);
+	}
+
 	function handleEditorChange(event: FlowEditorEvent) {
 		status = {
 			blockCount: editor!.blockList().length,
@@ -414,11 +439,7 @@
 		if (event === 'block:focus' || event === 'block:blur'
 			|| event === 'conn:focus' || event === 'conn:blur' || event === 'block:move') return;
 
-		// Save active file into files array (persisted via $effect)
-		const json = editor!.exportJson();
-		const viewport = editor!.getViewport();
-		files = files.map(f => f.id === activeFileId ? { ...f, json, viewport } : f);
-
+		scheduleSave();
 		cCode = generateAllCode();
 	}
 	
