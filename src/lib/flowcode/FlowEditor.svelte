@@ -92,15 +92,29 @@
 		};
 	}
 
+	function _deleteBlockRaw(blockId: string) {
+		canvasBlocks = canvasBlocks.filter((b) => b.id !== blockId);
+		connections = connections.filter(
+			(c) => c.fromBlockId !== blockId && c.toBlockId !== blockId
+		);
+		if (connectingFrom?.blockId === blockId) connectingFrom = null;
+	}
+
+	function _deleteConnectionRaw(connId: string) {
+		connections = connections.filter((c) => c.id !== connId);
+	}
+
 	function deleteSelected() {
 		const blockIds = new Set([...selectedBlockIds, ...(selectedBlockId ? [selectedBlockId] : [])]);
-		for (const id of blockIds) deleteBlock(id);
+		for (const id of blockIds) _deleteBlockRaw(id);
 		const connIds = new Set([...selectedConnIds, ...(selectedConnId ? [selectedConnId] : [])]);
-		for (const id of connIds) deleteConnection(id);
+		for (const id of connIds) _deleteConnectionRaw(id);
 		selectedBlockIds = new Set();
 		selectedBlockId = null;
 		selectedConnIds = new Set();
 		selectedConnId = null;
+		saveHistory();
+		onchange?.('block:delete');
 	}
 
 	function cutSelected() {
@@ -239,6 +253,7 @@
 	let draggingFromPalette = $state<BlockDef | null>(null);
 	let paletteGhost = $state<{ x: number; y: number } | null>(null);
 	let draggingBlock = $state<{ id: string; offsetX: number; offsetY: number } | null>(null);
+	let didBlockMove = false;
 
 	let connectingFrom = $state<{ blockId: string; portId: string } | null>(null);
 	let mousePos = $state({ x: 0, y: 0 });
@@ -455,6 +470,7 @@
 		}
 		multiDragOffsets = offsets;
 		draggingBlock = { id: block.id, offsetX: cc.x - block.x, offsetY: cc.y - block.y };
+		didBlockMove = false;
 	}
 
 	// ─── Window-level pointer events (palette ghost + block drag) ────
@@ -482,7 +498,8 @@
 		if (draggingFromPalette) dropPaletteBlock(e.clientX, e.clientY);
 		// Fallback: end block drag if canvas pointerup didn't fire (e.g. pointer left canvas)
 		if (draggingBlock) {
-			saveHistory();
+			if (didBlockMove) saveHistory();
+			didBlockMove = false;
 			draggingBlock = null;
 			multiDragOffsets = null;
 		}
@@ -545,6 +562,7 @@
 						: b
 				);
 			}
+			didBlockMove = true;
 			onchange?.('block:move');
 		}
 	}
@@ -655,7 +673,8 @@
 				connectingFrom = null;
 			}
 		}
-		if (draggingBlock || multiDragOffsets) saveHistory(); // block move end
+		if (didBlockMove && (draggingBlock || multiDragOffsets)) saveHistory();
+		didBlockMove = false;
 		draggingBlock = null;
 		multiDragOffsets = null;
 	}
@@ -736,22 +755,7 @@
 			}
 		}
 		if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput) {
-			if (selectedBlockIds.size > 0) {
-				const toDelete = new Set([...selectedBlockIds, ...(selectedBlockId ? [selectedBlockId] : [])]);
-				for (const id of toDelete) deleteBlock(id);
-				selectedBlockIds = new Set();
-				selectedBlockId = null;
-			} else if (selectedConnIds.size > 0) {
-				for (const id of selectedConnIds) deleteConnection(id);
-				selectedConnIds = new Set();
-				selectedConnId = null;
-			} else if (selectedBlockId) {
-				deleteBlock(selectedBlockId);
-				selectedBlockId = null;
-			} else if (selectedConnId) {
-				deleteConnection(selectedConnId);
-				selectedConnId = null;
-			}
+			deleteSelected();
 		}
 		if (e.ctrlKey && e.code === 'KeyA' && !isInput) {
 			e.preventDefault();
@@ -848,17 +852,13 @@
 	}
 
 	export function deleteBlock(blockId: string) {
-		canvasBlocks = canvasBlocks.filter((b) => b.id !== blockId);
-		connections = connections.filter(
-			(c) => c.fromBlockId !== blockId && c.toBlockId !== blockId
-		);
-		if (connectingFrom?.blockId === blockId) connectingFrom = null;
+		_deleteBlockRaw(blockId);
 		saveHistory();
 		onchange?.('block:delete');
 	}
 
 	export function deleteConnection(connId: string) {
-		connections = connections.filter((c) => c.id !== connId);
+		_deleteConnectionRaw(connId);
 		saveHistory();
 		onchange?.('conn:delete');
 	}
@@ -1154,7 +1154,7 @@
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
 		bind:this={canvas}
-		class="relative flex-1 overflow-hidden touch-none"
+		class="relative flex-1 overflow-hidden touch-none outline-none"
 		style="background-color:#0d1117; background-image: radial-gradient(circle, #1e293b 1px, transparent 1px); background-size: {GRID_SIZE * zoom}px {GRID_SIZE * zoom}px; background-position: {panX % (GRID_SIZE * zoom)}px {panY % (GRID_SIZE * zoom)}px; cursor: {rubberBand ? 'crosshair' : isPanning ? 'grabbing' : 'grab'};"
 		role="application"
 		tabindex="-1"

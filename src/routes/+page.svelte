@@ -97,6 +97,19 @@
 		}
 	}
 
+	// beforeunload: $effect is async-batched and may not run before the browser closes,
+	// so write localStorage directly here without relying on the $effect.
+	function handleBeforeUnload() {
+		if (!saveTimer) return; // nothing pending
+		clearTimeout(saveTimer);
+		saveTimer = null;
+		if (!editor) return;
+		const json = editor.exportJson();
+		const viewport = editor.getViewport();
+		const flushed = files.map(f => f.id === activeFileId ? { ...f, json, viewport } : f);
+		localStorage.setItem('flowcode-project-v2', JSON.stringify({ files: flushed, activeFileId }));
+	}
+
 	function switchFile(id: string) {
 		if (id === activeFileId) return;
 		flushSave();
@@ -751,6 +764,9 @@
 		agent.onPortData = (p) => { serialLogs = [...serialLogs, String(p.data)]; };
 		agent.onPortClose = () => { serialConnected = false; };
 		agent.start();
+
+		window.addEventListener('beforeunload', handleBeforeUnload);
+		return () => window.removeEventListener('beforeunload', handleBeforeUnload);
 	});
 
 	$effect(() => {
