@@ -115,6 +115,16 @@
 		cCode = '';
 	}
 
+	function confirmDeleteFile(id: string, name: string) {
+		confirmDialogOption = {
+			title: 'Delete file',
+			message: `Delete "${name}"? This cannot be undone.`,
+			confirmLabel: 'Delete',
+			onconfirm: () => deleteFile(id),
+		};
+		confirmDialogOpen = true;
+	}
+
 	function deleteFile(id: string) {
 		if (files.length <= 1) return;
 		const idx = files.findIndex(f => f.id === id);
@@ -1126,7 +1136,7 @@
 											{#if files.length > 1}
 												<button
 													class="ml-auto shrink-0 rounded p-0.5 text-gray-600 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-900/40 hover:text-red-400"
-													onclick={(e) => { e.stopPropagation(); deleteFile(file.id); }}
+													onclick={(e) => { e.stopPropagation(); confirmDeleteFile(file.id, file.name); }}
 													title="Delete file"
 												>
 													<X size={11} />
