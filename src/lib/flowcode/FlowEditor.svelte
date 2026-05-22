@@ -23,6 +23,8 @@
 		categories?: BlockCategory[];
 		/** ซ่อน Block Palette (สำหรับ embed mode) */
 		embed?: boolean;
+		/** ป้องกันการแก้ไขทุกอย่าง — pan/zoom ยังใช้ได้ */
+		readOnly?: boolean;
 		/** เรียกทุกครั้งที่ state เปลี่ยน */
 		onchange?: (event: FlowEditorEvent) => void;
 		onhelp?: (blockInfo: BlockDef) => void;
@@ -44,7 +46,7 @@
 		| 'project:clear'
 		| 'zoom';
 
-	let { categories = [], embed = false, onchange, onhelp }: Props = $props();
+	let { categories = [], embed = false, readOnly = false, onchange, onhelp }: Props = $props();
 
 	/** map จาก typeId → BlockDef ที่ใช้งานอยู่ */
 	const defMap = $derived<Record<string, BlockDef>>(
@@ -354,6 +356,7 @@
 
 	// ─── Palette drag ────────────────────────────────────────────────
 	function handlePaletteMouseDown(e: PointerEvent, block: BlockDef) {
+		if (readOnly) return;
 		e.preventDefault();
 		// Capture pointer so move/up events follow the finger even outside the element
 		(e.currentTarget as Element)?.setPointerCapture(e.pointerId);
@@ -405,6 +408,7 @@
 
 	// ─── Block drag ──────────────────────────────────────────────────
 	function handleBlockMouseDown(e: PointerEvent, block: CanvasBlock) {
+		if (readOnly) return;
 		if ((e.target as HTMLElement).closest('.port-btn')) return;
 		// Don't preventDefault on interactive elements — preventDefault on pointerdown
 		// suppresses subsequent mousedown events, breaking Dropdown and other controls.
@@ -591,8 +595,8 @@
 		if (t instanceof SVGPathElement || t instanceof SVGCircleElement) return;
 		if (connectingFrom || draggingConnEnd) return;
 
-		// Ctrl+drag = rubber band selection
-		if (e.ctrlKey && e.button === 0) {
+		// Ctrl+drag = rubber band selection (disabled in readOnly)
+		if (!readOnly && e.ctrlKey && e.button === 0) {
 			const cc = toCanvasCoords(e.clientX, e.clientY);
 			rubberBand = { startX: cc.x, startY: cc.y, endX: cc.x, endY: cc.y };
 			canvas.setPointerCapture(e.pointerId);
@@ -738,6 +742,7 @@
 
 	// ─── Keyboard ────────────────────────────────────────────────────
 	function handleKeyDown(e: KeyboardEvent) {
+		if (readOnly) return;
 		const active = document.activeElement;
 		const isInput = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
 		// Undo / Redo / Copy / Paste / Duplicate — use e.code for any keyboard layout
@@ -793,12 +798,14 @@
 
 	// ─── Port interaction ────────────────────────────────────────────
 	function handleOutputPortMouseDown(e: PointerEvent, blockId: string, portId: string) {
+		if (readOnly) return;
 		e.stopPropagation();
 		e.preventDefault();
 		connectingFrom = { blockId, portId };
 	}
 
 	function handleInputPortMouseUp(e: PointerEvent, blockId: string, portId: string) {
+		if (readOnly) return;
 		e.stopPropagation();
 		if (!connectingFrom) return;
 		const _fromPort = canvasBlocks
@@ -902,6 +909,7 @@
 	}
 
 	function updateBlockParam(blockId: string, paramId: string, raw: string) {
+		if (readOnly) return;
 		const def = defMap[canvasBlocks.find((b) => b.id === blockId)?.typeId ?? ''];
 		const pDef = def?.params?.find((p) => p.id === paramId);
 		let value = raw;
@@ -992,6 +1000,7 @@
 	}
 
 	function editNote(blockId: string) {
+		if (readOnly) return;
 		let b = canvasBlocks.find((b) => b.id === blockId);
 		if (!b) return; // not found block id
 		const newNote = prompt('Note text', b.note);
@@ -1166,8 +1175,8 @@
 		onwheel={handleWheel}
 		oncontextmenu={(e) => {
 			if (e.target instanceof SVGElement) return;
-			e.preventDefault(); // ป้องกัน browser native context menu เสมอ
-			if (clipboard) {
+			e.preventDefault();
+			if (!readOnly && clipboard) {
 				canvasContextMenu = { x: e.clientX, y: e.clientY };
 				canvasContextMenuPos = toCanvasCoords(e.clientX, e.clientY);
 			}
@@ -1288,6 +1297,7 @@
 						const t = e.target as HTMLElement;
 						if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
 						e.preventDefault(); e.stopPropagation();
+						if (readOnly) return;
 						contextMenu = { x: e.clientX, y: e.clientY, blockId: block.id };
 					contextMenuCanvasPos = toCanvasCoords(e.clientX, e.clientY);
 					}}
@@ -1336,6 +1346,7 @@
 											<Dropdown
 												value={pVal}
 												options={getVarnameOptions((pDef as ParamVarname).category)}
+												readonly={readOnly}
 												onchange={(v) => handleVarnameChange(block.id, pDef.id, (pDef as ParamVarname).category, v)}
 												onpointerdown={(e) => e.stopPropagation()}
 												style="height:{PARAM_INPUT_H}px; font-size:10px;"
@@ -1346,6 +1357,7 @@
 												value={pVal}
 												options={ms.options}
 												multiselect={true}
+												readonly={readOnly}
 												onchange={(v) => updateBlockParam(block.id, pDef.id, v)}
 												onpointerdown={(e) => e.stopPropagation()}
 												style="height:{PARAM_INPUT_H}px; font-size:10px;"
@@ -1355,6 +1367,7 @@
 											<Dropdown
 												value={pVal}
 												options={resolvedOptions}
+												readonly={readOnly}
 												onchange={(v) => updateBlockParam(block.id, pDef.id, v)}
 												onpointerdown={(e) => e.stopPropagation()}
 												style="height:{PARAM_INPUT_H}px; font-size:10px;"
@@ -1366,6 +1379,7 @@
 												type="number"
 												step="any"
 												value={pVal}
+												readonly={readOnly}
 												onpointerdown={(e) => e.stopPropagation()}
 												onchange={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLInputElement).value)}
 											/>
@@ -1378,6 +1392,7 @@
 													style="width:{PARAM_INPUT_H}px; height:{PARAM_INPUT_H}px; padding:2px;"
 													type="color"
 													value={colorParamToHex(pVal, colorDef.format)}
+													readonly={readOnly}
 													onpointerdown={(e) => e.stopPropagation()}
 													onchange={(e) => updateBlockParam(block.id, pDef.id, hexToColorParam((e.target as HTMLInputElement).value, colorDef.format))}
 												/>
@@ -1389,6 +1404,7 @@
 												style="height:{PARAM_INPUT_H}px"
 												type="text"
 												value={pVal}
+												readonly={readOnly}
 												onpointerdown={(e) => e.stopPropagation()}
 												oninput={(e) => updateBlockParam(block.id, pDef.id, (e.target as HTMLInputElement).value)}
 											/>

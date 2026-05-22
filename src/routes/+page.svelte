@@ -731,9 +731,9 @@
 					extensions = extensions.map(e => ({ ...e, installed: ids.has(e.id) }));
 				}
 				if (data.v >= 2 && Array.isArray(data.files) && data.files.length > 0) {
-					// v2: multi-file
+					// v2: multi-file — embed always starts from the first file
 					files = data.files;
-					activeFileId = data.activeFileId ?? data.files[0].id;
+					activeFileId = isEmbed ? data.files[0].id : (data.activeFileId ?? data.files[0].id);
 					const target = data.files.find((f: FlowFile) => f.id === activeFileId) ?? data.files[0];
 					editor?.importJson(target.json ?? '', target.viewport);
 				} else if (data.flow) {
@@ -1513,6 +1513,7 @@
 					bind:this={editor}
 					categories={boardCategories}
 					embed={isEmbed}
+					readOnly={isEmbed}
 					onchange={handleEditorChange}
 					onhelp={openBlockHelp}
 				/>

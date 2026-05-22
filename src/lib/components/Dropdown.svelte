@@ -13,6 +13,8 @@
 		loadOptions?: () => Promise<DropdownOption[]> | DropdownOption[];
 		onchange?: (value: string) => void;
 		disabled?: boolean;
+		/** ดูปกติ แต่เปิด dropdown ไม่ได้ (ต่างจาก disabled ที่จะ gray out) */
+		readonly?: boolean;
 		placeholder?: string;
 		emptyText?: string;
 		class?: string;
@@ -28,6 +30,7 @@
 		loadOptions,
 		onchange,
 		disabled = false,
+		readonly = false,
 		placeholder = '-',
 		emptyText = 'No options',
 		class: cls = '',
@@ -84,7 +87,7 @@
 
 	async function openDropdown(e: MouseEvent) {
 		onmousedown?.(e);
-		if (disabled) return;
+		if (disabled || readonly) return;
 
 		if (!open) {
 			if (loadOptions) {
@@ -159,11 +162,13 @@
 	type="button"
 	{disabled}
 	{style}
-	class="dropdown-trigger {cls}"
+	class="dropdown-trigger {cls} {readonly ? 'readonly' : ''}"
 	onmousedown={openDropdown}
 >
 	<span class="truncate flex-1 text-left">{selectedLabel}</span>
+	{#if !readonly}
 	<ChevronDown size={10} class="shrink-0 opacity-60 transition-transform {open ? 'rotate-180' : ''}" />
+	{/if}
 </button>
 
 {#if open}
@@ -231,6 +236,10 @@
 	.dropdown-trigger:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
+	}
+	.dropdown-trigger.readonly {
+		cursor: default;
+		pointer-events: none;
 	}
 
 	/* Rendered at body level via portal action */
