@@ -226,11 +226,16 @@
 	}
 
 	async function openShareDialog() {
+		// Flush pending save so the current file's latest state is included
+		flushSave();
+		const currentJson = editor?.exportJson() ?? '';
+		const snapshot = files.map(f => f.id === activeFileId ? { ...f, json: currentJson } : f);
 		const payload = JSON.stringify({
-			v:          1,
+			v:          2,
 			board:      selectedBoard.id,
 			extensions: extensions.filter(e => e.installed).map(e => e.id),
-			flow:       editor?.exportJson() ?? '',
+			files:      snapshot,
+			activeFileId,
 		});
 		const b64    = await _compress(payload);
 		const origin = `${window.location.origin}${window.location.pathname}`;
@@ -712,14 +717,32 @@
 			// ── Load from shared URL ───────────────────────────────────
 			try {
 				const json = await _decompress(openParam);
-				const data = JSON.parse(json) as { v: number; board: string; extensions: string[]; flow: string };
+				const data = JSON.parse(json) as {
+					v: number; board: string; extensions: string[];
+					// v1 single-file
+					flow?: string;
+					// v2 multi-file
+					files?: FlowFile[]; activeFileId?: string;
+				};
 				const board = boards.find(b => b.id === data.board);
 				if (board) selectedBoard = board;
 				if (data.extensions) {
 					const ids = new Set(data.extensions);
 					extensions = extensions.map(e => ({ ...e, installed: ids.has(e.id) }));
 				}
-				if (data.flow) editor?.importJson(data.flow);
+				if (data.v >= 2 && Array.isArray(data.files) && data.files.length > 0) {
+					// v2: multi-file
+					files = data.files;
+					activeFileId = data.activeFileId ?? data.files[0].id;
+					const target = data.files.find((f: FlowFile) => f.id === activeFileId) ?? data.files[0];
+					editor?.importJson(target.json ?? '', target.viewport);
+				} else if (data.flow) {
+					// v1: single-file (legacy)
+					const id = `f${Date.now()}`;
+					files = [{ id, name: 'main.flow', json: data.flow }];
+					activeFileId = id;
+					editor?.importJson(data.flow);
+				}
 			} catch (e) {
 				console.error('Failed to load from ?open param', e);
 				snackbar.show({ type: 'error', message: 'Failed to load workflow from URL' });
@@ -1485,13 +1508,36 @@
 		
 		<div class="flex min-h-0 min-w-0 flex-col grow">
 			<!-- ── FlowEditor ───────────────────────────────────────────── -->
-			<FlowEditor
-				bind:this={editor}
-				categories={boardCategories}
-				embed={isEmbed}
-				onchange={handleEditorChange}
-				onhelp={openBlockHelp}
-			/>
+			<div class="relative flex min-h-0 flex-1 flex-col">
+				<FlowEditor
+					bind:this={editor}
+					categories={boardCategories}
+					embed={isEmbed}
+					onchange={handleEditorChange}
+					onhelp={openBlockHelp}
+				/>
+
+				{#if isEmbed && files.length > 1}
+				<!-- Embed: floating file tabs bottom-left -->
+				<div class="pointer-events-none absolute bottom-4 left-4 z-20 flex flex-row gap-1">
+					{#each files as file (file.id)}
+						<button
+							class="pointer-events-auto flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm transition-all
+								{file.id === activeFileId
+									? 'border-blue-500/60 bg-blue-600/30 text-blue-300'
+									: 'border-gray-600/60 bg-gray-900/80 text-gray-400 hover:border-gray-500 hover:text-gray-200'}"
+							onclick={() => switchFile(file.id)}
+						>
+							<svg class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+									d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+							</svg>
+							{file.name}
+						</button>
+					{/each}
+				</div>
+				{/if}
+			</div>
 
 			{#if !isEmbed}
 			<!-- ─── Bottom Console Panel ───────────────────────────────────── -->
