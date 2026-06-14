@@ -159,7 +159,7 @@
 					<ArrowRight size={16} />
 				</a>
 				<a
-					href="https://github.com"
+					href="https://github.com/ArtronShop/flowcode-agent/releases"
 					target="_blank"
 					rel="noopener noreferrer"
 					class="flex items-center gap-2 rounded-xl border border-gray-700 bg-gray-800 px-6 py-3 text-sm font-semibold text-gray-300 hover:border-gray-600 hover:text-white transition-all hover:-translate-y-0.5"
