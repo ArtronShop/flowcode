@@ -25,10 +25,13 @@
       "Bash(Select-Object FullName)",
       "Bash(ls -R \"C:\\\\Users\\\\sonth\\\\GitHub\\\\duinoclaw\\\\lib\\\\duinoclaw\")",
       "Read(//c/Users/sonth/GitHub/duinoclaw/lib/duinoclaw/**)",
-      "Bash(python3 -)"
+      "Bash(python3 -)",
+      "Bash(mkdir -p \"c:/Users/sonth/GitHub/ui-click/src/routes/about\")",
+      "Bash(npx svelte-check *)"
     ],
     "additionalDirectories": [
-      "c:\\Users\\sonth\\GitHub\\ui-click\\src\\lib"
+      "c:\\Users\\sonth\\GitHub\\ui-click\\src\\lib",
+      "c:\\Users\\sonth\\GitHub\\ui-click\\src\\routes"
     ]
   }
 }
