@@ -27,7 +27,8 @@
       "Read(//c/Users/sonth/GitHub/duinoclaw/lib/duinoclaw/**)",
       "Bash(python3 -)",
       "Bash(mkdir -p \"c:/Users/sonth/GitHub/ui-click/src/routes/about\")",
-      "Bash(npx svelte-check *)"
+      "Bash(npx svelte-check *)",
+      "Bash(git submodule *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\sonth\\GitHub\\ui-click\\src\\lib",
